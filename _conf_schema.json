@@ -16,7 +16,9 @@
         "type": "list",
         "description": "info 资料卡随机背景地址列表",
         "default": [
-            "https://api.nerinyan.moe/profile-background"
+            "https://t.alcy.cc/mp",
+            "https://t.alcy.cc/moemp",
+            "https://picsum.photos/1280/720"
         ]
     }
 }

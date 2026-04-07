@@ -64,7 +64,11 @@ async def _run(args: argparse.Namespace) -> int:
             mode_name,
             args.day,
             args.source,
-            ["https://api.nerinyan.moe/profile-background"],
+            [
+                "https://t.alcy.cc/mp",
+                "https://t.alcy.cc/moemp",
+                "https://picsum.photos/1280/720",
+            ],
         )
 
         safe_name = args.username.replace("/", "_").replace("\\", "_")

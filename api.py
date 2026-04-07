@@ -241,10 +241,46 @@ class OsuApiClient:
         raise NetworkError(f"不支持的服务器: {source}")
 
     async def get_image_bytes(self, url: str) -> bytes:
-        response = await self.client.get(url)
-        if response.status_code != 200:
-            raise NetworkError(f"背景下载失败: HTTP {response.status_code}")
-        return response.content
+        async def _fetch_image(target_url: str, depth: int = 0) -> bytes:
+            response = await self.client.get(target_url, follow_redirects=True)
+            if response.status_code != 200:
+                raise NetworkError(f"背景下载失败: HTTP {response.status_code}")
+
+            content_type = (response.headers.get("content-type") or "").lower()
+            if content_type.startswith("image/"):
+                return response.content
+
+            if depth >= 1:
+                raise NetworkError("背景下载失败: 返回内容不是图片")
+
+            next_url: Optional[str] = None
+            try:
+                payload = response.json()
+            except ValueError:
+                payload = None
+
+            if isinstance(payload, dict):
+                for key in ("url", "image", "img", "pic", "background", "bg_url"):
+                    value = payload.get(key)
+                    if isinstance(value, str) and value.startswith("http"):
+                        next_url = value
+                        break
+            elif isinstance(payload, list) and payload:
+                first = payload[0]
+                if isinstance(first, str) and first.startswith("http"):
+                    next_url = first
+
+            if next_url is None:
+                text = response.text.strip()
+                if text.startswith("http"):
+                    next_url = text
+
+            if next_url is None:
+                raise NetworkError("背景下载失败: 返回内容不是图片")
+
+            return await _fetch_image(next_url, depth + 1)
+
+        return await _fetch_image(url)
 
     async def close(self):
         """关闭客户端连接"""

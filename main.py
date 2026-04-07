@@ -31,7 +31,14 @@ class OsuScorePlugin(Star):
         self.client_id = config.get("osu_client_id")
         self.client_secret = config.get("osu_client_secret")
         self.db_path = config.get("db_path", "./osuscore.db")
-        self.info_bg = config.get("info_bg", ["https://api.nerinyan.moe/profile-background"])
+        self.info_bg = config.get(
+            "info_bg",
+            [
+                "https://t.alcy.cc/mp",
+                "https://t.alcy.cc/moemp",
+                "https://picsum.photos/1280/720",
+            ],
+        )
 
         # 初始化组件
         self.db = Database(self.db_path)

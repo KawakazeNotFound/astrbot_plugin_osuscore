@@ -207,10 +207,31 @@ async def _load_background_base64(api_client, user_id: int, info_bg_urls: list[s
             bg_path.unlink(missing_ok=True)
             raise NetworkError("自定义背景图片读取错误，请重新上传！")
 
-    if not info_bg_urls:
-        raise NetworkError("未配置 info 背景地址 (info_bg)")
+    urls = [u for u in info_bg_urls if isinstance(u, str) and u.strip()]
+    random.shuffle(urls)
 
-    bg_url = random.choice(info_bg_urls)
-    bg_bytes = await api_client.get_image_bytes(bg_url)
-    encoded_string = base64.b64encode(bg_bytes).decode("utf-8")
-    return f"data:image/png;base64,{encoded_string}"
+    for bg_url in urls:
+        try:
+            bg_bytes = await api_client.get_image_bytes(bg_url)
+            encoded_string = base64.b64encode(bg_bytes).decode("utf-8")
+            return f"data:{_guess_image_mime(bg_bytes)};base64,{encoded_string}"
+        except Exception:
+            continue
+
+    # 远程背景全部失败时，回退到本地素材，避免 /info 直接失败。
+    local_fallback = ASSETS_DIR / "convert.jpg"
+    if local_fallback.exists():
+        encoded_string = base64.b64encode(local_fallback.read_bytes()).decode("utf-8")
+        return f"data:image/jpeg;base64,{encoded_string}"
+
+    raise NetworkError("背景下载失败: 所有背景地址均不可用")
+
+
+def _guess_image_mime(content: bytes) -> str:
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if content.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/png"
