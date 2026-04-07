@@ -86,8 +86,11 @@ class OsuScorePlugin(Star):
             osu_id = user_info["id"]
             osu_name = user_info["username"]
 
+            old_user = await self.db.get_user(user_id)
+            osu_mode = int(old_user["osu_mode"]) if old_user and "osu_mode" in old_user else 0
+
             # 保存到数据库
-            await self.db.save_user(user_id, osu_id, osu_name)
+            await self.db.save_user(user_id, osu_id, osu_name, osu_mode)
 
             yield event.plain_result(f"✅ 成功绑定账号: {osu_name} (ID: {osu_id})")
 
@@ -152,28 +155,36 @@ class OsuScorePlugin(Star):
         # 解析参数
         args = parse_command_args(message)
         username = args.get("username")
-        mode = args.get("mode", "0")
+        mode = args.get("mode")
+
+        bound_user_data = await self.db.get_user(user_id)
+        if not args.get("mode_specified"):
+            mode = str(bound_user_data["osu_mode"]) if bound_user_data else "0"
+        if mode is None:
+            mode = "0"
+        mode_api = self._mode_to_api_format(mode)
 
         try:
             # 获取用户信息
             if not username:
                 # 使用绑定的账号
-                user_data = await self.db.get_user(user_id)
+                user_data = bound_user_data
                 if not user_data:
                     yield event.plain_result("❌ 未找到绑定的账号，请先使用 /bind 绑定\n使用: /bind <osuid或用户名>")
                     return
                 osu_id = user_data["osu_id"]
             else:
                 # 查询指定用户
-                user_info = await self.api_client.get_user(username)
+                user_info = await self.api_client.get_user(username, mode=mode_api)
                 osu_id = user_info["id"]
 
             # 获取最近成绩
             scores = await self.api_client.get_user_scores(
                 osu_id,
-                mode=self._mode_to_api_format(mode),
+                mode=mode_api,
                 scope="recent",
-                limit=1
+                limit=1,
+                include_failed=False,
             )
 
             logger.info(f"API returned scores: {type(scores)}")
@@ -192,7 +203,7 @@ class OsuScorePlugin(Star):
             # 如果score响应中没有用户统计信息，额外获取
             if not user_info.get('global_rank') or not user_info.get('country_rank'):
                 try:
-                    full_user_info = await self.api_client.get_user(str(osu_id))
+                    full_user_info = await self.api_client.get_user(str(osu_id), mode=mode_api)
                     if full_user_info:
                         stats = full_user_info.get('statistics', {})
                         user_info['global_rank'] = stats.get('global_rank', 0)

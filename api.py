@@ -110,7 +110,8 @@ class OsuApiClient:
         scope: str = "recent",
         limit: int = 1,
         offset: int = 0,
-        legacy_only: bool = False
+        legacy_only: bool = False,
+        include_failed: bool = False,
     ) -> list:
         """
         获取用户成绩
@@ -123,7 +124,8 @@ class OsuApiClient:
             "mode": mode,
             "limit": limit,
             "offset": offset,
-            "legacy_only": legacy_only
+            "legacy_only": legacy_only,
+            "include_fails": int(include_failed),
         }
 
         response = await self.client.get(url, headers=headers, params=params)

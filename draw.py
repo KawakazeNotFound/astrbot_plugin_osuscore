@@ -759,8 +759,24 @@ class ScoreImageGenerator:
                 fill=(255, 255, 255, 255)
             )
         
+        def _to_int(value: Any) -> int:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return 0
+
+        def _to_float(value: Any) -> float:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return 0.0
+
+        # 获取游戏模式与统计。
+        mode = str(score_info.get('mode', '0'))
+        stats = score_info.get("statistics", {}) or {}
+
         # PP值 (768, 438) - 所有模式统一位置
-        pp_value = score_info.get("pp", 0)
+        pp_value = _to_float(score_info.get("pp", 0))
         draw.text(
             (768, 438),
             f"{pp_value:.0f}",
@@ -768,69 +784,9 @@ class ScoreImageGenerator:
             anchor="mm",
             fill=(255, 255, 255, 255)
         )
-        
-        # 获取游戏模式
-        mode = str(score_info.get('mode', '0'))
-        
-        # Standard模式显示PP分解和IF/SS PP
-        if mode == '0':
-            # IF FC PP (933, 393)
-            if_fc_pp = score_info.get('if_fc_pp', 0)
-            if if_fc_pp > 0:
-                draw.text(
-                    (933, 393),
-                    f"{if_fc_pp:.0f}",
-                    font=self.assets.get_font('torus_r_25'),
-                    anchor="mm",
-                    fill=(255, 255, 255, 255)
-                )
-            
-            # SS PP (1066, 393)
-            ss_pp = score_info.get('ss_pp', 0)
-            if ss_pp > 0:
-                draw.text(
-                    (1066, 393),
-                    f"{ss_pp:.0f}",
-                    font=self.assets.get_font('torus_r_25'),
-                    anchor="mm",
-                    fill=(255, 255, 255, 255)
-                )
-            
-            # AIM PP (933, 482)
-            pp_aim = score_info.get('pp_aim', 0)
-            if pp_aim > 0:
-                draw.text(
-                    (933, 482),
-                    f"{pp_aim:.0f}",
-                    font=self.assets.get_font('torus_r_25'),
-                    anchor="mm",
-                    fill=(255, 255, 255, 255)
-                )
-            
-            # SPEED PP (1066, 482)
-            pp_speed = score_info.get('pp_speed', 0)
-            if pp_speed > 0:
-                draw.text(
-                    (1066, 482),
-                    f"{pp_speed:.0f}",
-                    font=self.assets.get_font('torus_r_25'),
-                    anchor="mm",
-                    fill=(255, 255, 255, 255)
-                )
-            
-            # ACC PP (1200, 482)
-            pp_acc = score_info.get('pp_acc', 0)
-            if pp_acc > 0:
-                draw.text(
-                    (1200, 482),
-                    f"{pp_acc:.0f}",
-                    font=self.assets.get_font('torus_r_25'),
-                    anchor="mm",
-                    fill=(255, 255, 255, 255)
-                )
-        
+
         # 准确率 (768, 577) - 所有模式统一位置
-        accuracy = score_info.get("accuracy", 0) * 100
+        accuracy = _to_float(score_info.get("accuracy", 0)) * 100
         draw.text(
             (768, 577),
             f"{accuracy:.2f}%",
@@ -838,52 +794,78 @@ class ScoreImageGenerator:
             anchor="mm",
             fill=(255, 255, 255, 255)
         )
-        
-        # Combo (768, 666) - 所有模式统一位置
-        max_combo = score_info.get("max_combo", 0)
+
+        # Combo (768, 666) - std/catch 对齐参考显示当前/谱面最大连击。
+        max_combo = _to_int(score_info.get("max_combo", 0))
+        map_max_combo = _to_int(score_info.get("map_max_combo", 0))
+        if mode in {"0", "2"} and map_max_combo > 0:
+            combo_text = f"{max_combo:,}/{map_max_combo}"
+        else:
+            combo_text = f"{max_combo:,}"
         draw.text(
             (768, 666),
-            f"{max_combo:,}",
+            combo_text,
             font=self.assets.get_font('torus_r_25'),
             anchor="mm",
             fill=(255, 255, 255, 255)
         )
-        
-        # Standard模式的300/100/50/Miss (933, 577), (1066, 577), (933, 666), (1066, 666)
+
+        # 各模式 PP 字段展示。
+        ss_pp = _to_float(score_info.get('ss_pp', 0))
+        if_fc_pp = _to_float(score_info.get('if_fc_pp', 0))
+        pp_aim = _to_float(score_info.get('pp_aim', 0))
+        pp_speed = _to_float(score_info.get('pp_speed', 0))
+        pp_acc = _to_float(score_info.get('pp_acc', 0))
+
         if mode == '0':
-            stats = score_info.get("statistics", {})
-            # 300 (933, 577)
-            draw.text(
-                (933, 577),
-                f"{stats.get('count_300', 0)}",
-                font=self.assets.get_font('torus_r_25'),
-                anchor="mm",
-                fill=(255, 255, 255, 255)
-            )
-            # 100 (1066, 577)
-            draw.text(
-                (1066, 577),
-                f"{stats.get('count_100', 0)}",
-                font=self.assets.get_font('torus_r_25'),
-                anchor="mm",
-                fill=(255, 255, 255, 255)
-            )
-            # 50 (933, 666)
-            draw.text(
-                (933, 666),
-                f"{stats.get('count_50', 0)}",
-                font=self.assets.get_font('torus_r_25'),
-                anchor="mm",
-                fill=(255, 255, 255, 255)
-            )
-            # MISS (1066, 666)
-            draw.text(
-                (1066, 666),
-                f"{stats.get('count_miss', 0)}",
-                font=self.assets.get_font('torus_r_25'),
-                anchor="mm",
-                fill=(255, 68, 111, 255)  # 红色
-            )
+            if if_fc_pp > 0:
+                draw.text((933, 393), f"{if_fc_pp:.0f}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            if ss_pp > 0:
+                draw.text((1066, 393), f"{ss_pp:.0f}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            if pp_aim > 0:
+                draw.text((933, 482), f"{pp_aim:.0f}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            if pp_speed > 0:
+                draw.text((1066, 482), f"{pp_speed:.0f}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            if pp_acc > 0:
+                draw.text((1200, 482), f"{pp_acc:.0f}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+
+            draw.text((933, 577), f"{_to_int(stats.get('count_300', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            draw.text((1066, 577), f"{_to_int(stats.get('count_100', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            draw.text((933, 666), f"{_to_int(stats.get('count_50', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            draw.text((1066, 666), f"{_to_int(stats.get('count_miss', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 68, 111, 255))
+
+        elif mode == '1':
+            if ss_pp > 0:
+                draw.text((933, 393), f"{ss_pp:.0f}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+
+            draw.text((933, 577), f"{_to_int(stats.get('count_300', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            draw.text((1066, 577), f"{_to_int(stats.get('count_100', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            draw.text((933, 666), f"{_to_int(stats.get('count_miss', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 68, 111, 255))
+
+        elif mode == '2':
+            if ss_pp > 0:
+                draw.text((933, 393), f"{ss_pp:.0f}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+
+            draw.text((933, 577), f"{_to_int(stats.get('count_300', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            draw.text((1066, 577), f"{_to_int(stats.get('count_100', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            draw.text((933, 666), f"{_to_int(stats.get('count_50', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            draw.text((1066, 666), f"{_to_int(stats.get('count_miss', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 68, 111, 255))
+
+        else:
+            if ss_pp > 0:
+                draw.text((933, 393), f"{ss_pp:.0f}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+
+            perfect = _to_int(stats.get('count_geki', 0))
+            great = _to_int(stats.get('count_300', 0))
+            ratio = "∞:1" if great == 0 else f"{perfect / great:.1f}:1"
+            draw.text((933, 600), ratio, font=self.assets.get_font('torus_r_15'), anchor="mm", fill=(255, 255, 255, 255))
+
+            draw.text((933, 577), f"{perfect}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            draw.text((1066, 577), f"{great}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            draw.text((1200, 577), f"{_to_int(stats.get('count_katu', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            draw.text((933, 666), f"{_to_int(stats.get('count_100', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            draw.text((1066, 666), f"{_to_int(stats.get('count_50', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
+            draw.text((1200, 666), f"{_to_int(stats.get('count_miss', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 68, 111, 255))
             
         # ============== 新增：绘制左侧 Map Stats (CS, HP, OD, AR, SR) ==============
         # 数据获取
@@ -892,6 +874,26 @@ class ScoreImageGenerator:
         od = beatmap_info.get("od", beatmap_info.get("accuracy", 0))
         ar = beatmap_info.get("ar", 0)
         sr = beatmap_info.get("difficulty_rating", 0)
+
+        # 对齐参考项目：mania 玩 std 转谱时，按转换规则修正显示用 CS。
+        if mode == "3" and str(beatmap_info.get("mode_int", 0)) == "0":
+            circles = _to_int(beatmap_info.get("count_circles", 0))
+            sliders = _to_int(beatmap_info.get("count_sliders", 0))
+            spinners = _to_int(beatmap_info.get("count_spinners", 0))
+            total_objects = circles + sliders + spinners
+            if total_objects > 0:
+                convert_ratio = (sliders + spinners) / total_objects
+                convert_od = round(_to_float(od))
+                if convert_ratio < 0.20 or ((convert_ratio < 0.30 or round(_to_float(cs)) >= 5) and convert_od > 5):
+                    cs = 7.0
+                elif (convert_ratio < 0.30 or round(_to_float(cs)) >= 5) and convert_od <= 5:
+                    cs = 6.0
+                elif convert_ratio > 0.60 and convert_od > 4:
+                    cs = 5.0
+                elif convert_ratio > 0.60 and convert_od <= 4:
+                    cs = 4.0
+                else:
+                    cs = max(4.0, min(_to_float(od) + 1, 7.0))
         
         map_stats = [cs, hp, od, ar]
         for num, val in enumerate(map_stats):

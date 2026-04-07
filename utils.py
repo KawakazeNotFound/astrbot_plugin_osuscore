@@ -111,17 +111,19 @@ def parse_command_args(text: str) -> Dict[str, Any]:
     """
     args = {
         "username": None,
-        "mode": "0",
+        "mode": None,
+        "mode_specified": False,
         "mods": [],
     }
 
-    # 移除命令本身
-    text = text.strip()
+    # 统一全角符号，尽量兼容输入习惯。
+    text = text.strip().replace("：", ":").replace("＋", "+")
 
     # 提取模式 :0-3
     mode_match = re.search(r':\s*([0-3])', text)
     if mode_match:
         args["mode"] = mode_match.group(1)
+        args["mode_specified"] = True
         text = text[:mode_match.start()] + text[mode_match.end():]
 
     # 提取 mod +HDDT
