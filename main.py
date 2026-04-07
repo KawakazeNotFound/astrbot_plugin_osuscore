@@ -60,7 +60,11 @@ class OsuScorePlugin(Star):
             return
 
         user_id = event.get_sender_id()
+        # 获取参数（去掉命令名）
         args = event.message_str.strip()
+        # 如果消息以 "bind" 开头，去掉它
+        if args.lower().startswith("bind"):
+            args = args[4:].strip()
 
         if not args:
             yield event.plain_result("❌ 请输入 OSU 用户 ID 或用户名\n使用: /bind <osuid或用户名>")
@@ -93,7 +97,11 @@ class OsuScorePlugin(Star):
             return
 
         user_id = event.get_sender_id()
+        # 获取参数（去掉命令名）
         message = event.message_str.strip()
+        # 如果消息以 "pr" 开头，去掉它
+        if message.lower().startswith("pr"):
+            message = message[2:].strip()
 
         # 解析参数
         args = parse_command_args(message)
