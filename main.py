@@ -130,40 +130,56 @@ class OsuScorePlugin(Star):
                 limit=1
             )
 
+            logger.info(f"API returned scores: {type(scores)}")
+            logger.info(f"Scores data: {scores}")
+
             if not scores:
                 yield event.plain_result("❌ 未找到最近成绩")
                 return
 
             score = scores[0]
+            logger.info(f"First score keys: {score.keys() if isinstance(score, dict) else 'not a dict'}")
 
             # 获取谱面信息
-            beatmap_id = score["beatmap"]["id"]
-            beatmap_info = await self.api_client.get_beatmap(beatmap_id)
+            beatmap_id = score.get("beatmap_id", 0)
+            if not beatmap_id:
+                # 如果没有直接的 beatmap_id，尝试从 beatmap 对象中获取
+                beatmap_obj = score.get("beatmap", {})
+                beatmap_id = beatmap_obj.get("id", 0)
+
+            if beatmap_id:
+                beatmap_info = await self.api_client.get_beatmap(beatmap_id)
+            else:
+                raise Exception("无法获取谱面 ID")
 
             # 获取用户完整信息（用于显示）
-            user_info = await self.api_client.get_user(osu_id)
+            try:
+                user_info = await self.api_client.get_user(str(osu_id))
+            except:
+                # 如果无法获取用户信息，使用基本信息
+                user_info = {"username": "Unknown"}
 
-            # 生成图片
+            # 生成图片数据
             score_data = {
-                "score": score["score"],
-                "accuracy": score["accuracy"],
-                "max_combo": score["max_combo"],
-                "rank": score["rank"],
-                "mods": score["mods"],
+                "score": score.get("total_score", score.get("score", 0)),  # 尝试 total_score，回退到 score
+                "accuracy": score.get("accuracy", 0),
+                "max_combo": score.get("max_combo", 0),
+                "rank": score.get("rank", "F"),
+                "mods": score.get("mods", []),
                 "pp": score.get("pp", 0),
-                "created_at": score["created_at"],
+                "created_at": score.get("ended_at", score.get("created_at", "")),
                 "mode": mode,
             }
 
             beatmap_data = {
-                "title": beatmap_info["beatmapset"]["title"],
-                "version": beatmap_info["version"],
-                "creator": beatmap_info["beatmapset"]["creator"],
-                "difficulty_rating": beatmap_info["difficulty_rating"],
+                "title": beatmap_info.get("beatmapset", {}).get("title", "Unknown"),
+                "version": beatmap_info.get("version", "Unknown"),
+                "creator": beatmap_info.get("beatmapset", {}).get("creator", "Unknown"),
+                "difficulty_rating": beatmap_info.get("difficulty_rating", 0),
             }
 
             user_simple = {
-                "username": user_info["username"],
+                "username": user_info.get("username", "Unknown"),
             }
 
             # 生成图片
