@@ -651,6 +651,66 @@ class ScoreImageGenerator:
             fill=(255, 255, 255, 255)
         )
         
+        # 获取游戏模式
+        mode = str(score_info.get('mode', '0'))
+        
+        # Standard模式显示PP分解和IF/SS PP
+        if mode == '0':
+            # IF FC PP (933, 393)
+            if_fc_pp = score_info.get('if_fc_pp', 0)
+            if if_fc_pp > 0:
+                draw.text(
+                    (933, 393),
+                    f"{if_fc_pp:.0f}",
+                    font=self.assets.get_font('torus_r_25'),
+                    anchor="mm",
+                    fill=(255, 255, 255, 255)
+                )
+            
+            # SS PP (1066, 393)
+            ss_pp = score_info.get('ss_pp', 0)
+            if ss_pp > 0:
+                draw.text(
+                    (1066, 393),
+                    f"{ss_pp:.0f}",
+                    font=self.assets.get_font('torus_r_25'),
+                    anchor="mm",
+                    fill=(255, 255, 255, 255)
+                )
+            
+            # AIM PP (933, 482)
+            pp_aim = score_info.get('pp_aim', 0)
+            if pp_aim > 0:
+                draw.text(
+                    (933, 482),
+                    f"{pp_aim:.0f}",
+                    font=self.assets.get_font('torus_r_25'),
+                    anchor="mm",
+                    fill=(255, 255, 255, 255)
+                )
+            
+            # SPEED PP (1066, 482)
+            pp_speed = score_info.get('pp_speed', 0)
+            if pp_speed > 0:
+                draw.text(
+                    (1066, 482),
+                    f"{pp_speed:.0f}",
+                    font=self.assets.get_font('torus_r_25'),
+                    anchor="mm",
+                    fill=(255, 255, 255, 255)
+                )
+            
+            # ACC PP (1200, 482)
+            pp_acc = score_info.get('pp_acc', 0)
+            if pp_acc > 0:
+                draw.text(
+                    (1200, 482),
+                    f"{pp_acc:.0f}",
+                    font=self.assets.get_font('torus_r_25'),
+                    anchor="mm",
+                    fill=(255, 255, 255, 255)
+                )
+        
         # 准确率 (768, 577) - 所有模式统一位置
         accuracy = score_info.get("accuracy", 0) * 100
         draw.text(
@@ -670,9 +730,6 @@ class ScoreImageGenerator:
             anchor="mm",
             fill=(255, 255, 255, 255)
         )
-        
-        # 根据模式绘制统计信息
-        mode = str(score_info.get('mode', '0'))
         
         # Standard模式的300/100/50/Miss (933, 577), (1066, 577), (933, 666), (1066, 666)
         if mode == '0':

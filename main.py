@@ -16,6 +16,7 @@ from .database import Database
 from .draw import ScoreImageGenerator
 from .utils import parse_command_args, get_mode_name
 from .data_adapter import adapt_api_data_for_image
+from .pp_calculator import calculate_all_pp_info
 
 
 @register("osuscore", "claude", "OSU查分插件", "0.1.0", "https://github.com/user/astrbot_plugin_osuscore")
@@ -155,6 +156,24 @@ class OsuScorePlugin(Star):
                         user_info['pp'] = stats.get('pp', 0)
                 except Exception as e:
                     logger.warning(f"Failed to get user statistics: {e}")
+            
+            # 计算PP信息（IF FC, SS PP, PP分解）
+            try:
+                pp_info = await calculate_all_pp_info(
+                    beatmap_id=beatmap_data.get('id'),
+                    beatmapset_id=beatmap_data.get('beatmapset_id'),
+                    mods=score_data.get('mods', []),
+                    accuracy=score_data.get('accuracy', 0),
+                    max_combo=score_data.get('max_combo', 0),
+                    statistics=score_data.get('statistics', {}),
+                    mode=int(score_data.get('mode', 0))
+                )
+                
+                # 将PP信息合并到score_data
+                score_data.update(pp_info)
+                logger.info(f"PP calculation result: {pp_info}")
+            except Exception as e:
+                logger.warning(f"Failed to calculate PP: {e}")
             
             logger.info(f"Adapted user_info: {user_info}")
             logger.info(f"Adapted score_data: {score_data}")

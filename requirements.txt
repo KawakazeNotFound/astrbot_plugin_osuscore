@@ -4,3 +4,4 @@ pydantic>=1.10.0
 sqlalchemy>=2.0.0
 matplotlib>=3.5.0
 aiofiles>=0.8.0
+rosu-pp-py>=1.0.0
