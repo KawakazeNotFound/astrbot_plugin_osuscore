@@ -766,6 +766,46 @@ class ScoreImageGenerator:
                 anchor="mm",
                 fill=(255, 68, 111, 255)  # 红色
             )
+            
+        # ============== 新增：绘制左侧 Map Stats (CS, HP, OD, AR, SR) ==============
+        # 数据获取
+        cs = beatmap_info.get("cs", 0)
+        hp = beatmap_info.get("drain", 0)
+        od = beatmap_info.get("accuracy", 0)
+        ar = beatmap_info.get("ar", 0)
+        sr = beatmap_info.get("difficulty_rating", 0)
+        
+        map_stats = [cs, hp, od, ar]
+        for num, val in enumerate(map_stats):
+            # 将0-10的属性值映射到最大长度400
+            difflen = int(400 * max(0, val) / 10) if val <= 10 else 400
+            if difflen > 0:
+                diff_len_img = Image.new("RGBA", (difflen, 8), (255, 255, 255, 255))
+                im.alpha_composite(diff_len_img, (165, 352 + 35 * num))
+            
+            # 绘制属性数值 (610, 355 + 35 * num)
+            text_val = f"{val:.0f}" if val == round(val) else (f"{val:.2f}" if val != round(val, 1) else f"{val:.1f}")
+            draw.text(
+                (610, 355 + 35 * num),
+                text_val,
+                font=self.assets.get_font('torus_sb_20'),
+                anchor="mm",
+                fill=(255, 255, 255, 255)
+            )
+            
+        # 绘制 SR (490)
+        sr_difflen = int(400 * max(0.0, sr) / 10) if sr <= 10 else 400
+        if sr_difflen > 0:
+            sr_diff_len_img = Image.new("RGBA", (sr_difflen, 8), (255, 255, 255, 255))
+            im.alpha_composite(sr_diff_len_img, (165, 490))
+        
+        draw.text(
+            (610, 493),
+            f"{sr:.2f}",
+            font=self.assets.get_font('torus_sb_20'),
+            anchor="mm",
+            fill=(255, 255, 255, 255)
+        )
     
     async def _draw_mod_icons(self, im: Image.Image, score_info: Dict[str, Any]):
         """绘制Mod图标 - 按照nonebot坐标 (880 + 50*n, 100)"""
