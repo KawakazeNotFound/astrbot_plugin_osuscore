@@ -77,6 +77,7 @@ class Team(CompatBaseModel):
 
 class UnifiedUser(CompatBaseModel):
     avatar_url: str
+    cover_url: Optional[str] = None
     country_code: str
     id: int
     username: str

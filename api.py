@@ -167,6 +167,10 @@ class OsuApiClient:
 
             headers = await self._get_headers()
             data = await self._request_json(f"{self.api_base}/users/{uid}/{mode}", headers=headers)
+            if not data.get("cover_url"):
+                cover = data.get("cover")
+                if isinstance(cover, dict):
+                    data["cover_url"] = cover.get("custom_url") or cover.get("url")
             return UnifiedUser(**data)
 
         if source == "ppysb":

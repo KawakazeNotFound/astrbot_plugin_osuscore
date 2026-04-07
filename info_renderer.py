@@ -73,7 +73,7 @@ async def draw_info(
         n_play_time = statistics.play_time
         n_badge_count = len(info.badges) if info.badges else 0
 
-    bg = await _load_background_base64(api_client, info.id, info_bg_urls)
+    bg = await _load_background_base64(api_client, info.id, info_bg_urls, info.cover_url)
 
     if day != 0 and user and user.get("date"):
         day_delta = date.today() - date.fromisoformat(user["date"]) if isinstance(user["date"], str) else date.today() - user["date"]
@@ -197,7 +197,12 @@ async def _render_html_to_jpeg(template_path: Path, html: str) -> bytes:
             pass
 
 
-async def _load_background_base64(api_client, user_id: int, info_bg_urls: list[str]) -> str:
+async def _load_background_base64(
+    api_client,
+    user_id: int,
+    info_bg_urls: list[str],
+    user_cover_url: Optional[str] = None,
+) -> str:
     bg_path = USER_INFO_BG_DIR / str(user_id) / "info.png"
     if bg_path.exists():
         try:
@@ -207,10 +212,16 @@ async def _load_background_base64(api_client, user_id: int, info_bg_urls: list[s
             bg_path.unlink(missing_ok=True)
             raise NetworkError("自定义背景图片读取错误，请重新上传！")
 
-    urls = [u for u in info_bg_urls if isinstance(u, str) and u.strip()]
+    urls = [u.strip() for u in info_bg_urls if isinstance(u, str) and u.strip()]
     random.shuffle(urls)
+    candidates = []
+    if isinstance(user_cover_url, str) and user_cover_url.strip():
+        candidates.append(user_cover_url.strip())
+    for url in urls:
+        if url not in candidates:
+            candidates.append(url)
 
-    for bg_url in urls:
+    for bg_url in candidates:
         try:
             bg_bytes = await api_client.get_image_bytes(bg_url)
             encoded_string = base64.b64encode(bg_bytes).decode("utf-8")
