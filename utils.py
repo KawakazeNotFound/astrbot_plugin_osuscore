@@ -140,6 +140,61 @@ def parse_command_args(text: str) -> Dict[str, Any]:
     return args
 
 
+def parse_mania_command_args(text: str) -> Dict[str, Any]:
+    """解析 /mania 命令参数。
+
+    支持格式:
+    - /mania [用户名]
+    - /mania [用户名] [recent|best] [数量]
+    - /mania [用户名] [recent|best] [数量] [4k|7k]
+    - /mania ... [+mods]
+    """
+    args = {
+        "username": None,
+        "scope": "recent",
+        "limit": 1,
+        "variant": None,
+        "mods": [],
+    }
+
+    text = text.strip().replace("：", ":").replace("＋", "+")
+
+    mods_match = re.search(r'\+\s*([A-Za-z]+)', text)
+    if mods_match:
+        args["mods"] = parse_mods(mods_match.group(1))
+        text = text[:mods_match.start()] + text[mods_match.end():]
+
+    username_parts = []
+    scope_explicit = False
+    limit_explicit = False
+
+    for token in text.split():
+        token_lower = token.lower()
+        if token_lower in {"recent", "r"}:
+            args["scope"] = "recent"
+            scope_explicit = True
+            continue
+        if token_lower in {"best", "b"}:
+            args["scope"] = "best"
+            scope_explicit = True
+            continue
+        if token_lower in {"4k", "7k"}:
+            args["variant"] = token_lower
+            continue
+        # 数字在命令中可能是用户ID，也可能是查询数量。
+        # 仅当已经出现作用域/变体/用户名之一时，才将纯数字解释为数量。
+        if token.isdigit() and not limit_explicit and (scope_explicit or args["variant"] is not None or bool(username_parts)):
+            args["limit"] = max(1, min(int(token), 50))
+            limit_explicit = True
+            continue
+        username_parts.append(token)
+
+    if username_parts:
+        args["username"] = " ".join(username_parts)
+
+    return args
+
+
 def format_score_rank(rank: str) -> str:
     """格式化排名"""
     rank_map = {

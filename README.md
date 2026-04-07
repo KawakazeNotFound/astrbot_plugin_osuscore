@@ -6,6 +6,7 @@
 
 - ✅ 绑定 OSU 账号
 - ✅ 查询最近成绩（/pr）
+- ✅ 查询 osu!mania 成绩（/mania）
 - ✅ 支持多种游玩模式（Standard, Taiko, Catch, Mania）
 - ✅ 生成成绩截图
 
@@ -61,6 +62,20 @@
 /pr peppy              # 查询指定用户
 /pr peppy :1           # 查询 Taiko 模式
 /pr peppy :0 +HD       # 查询 HD Mod
+```
+
+### 查询 mania 成绩
+
+```
+/mania [用户名] [recent|best] [数量] [4k|7k] [+mods]
+```
+
+**示例**:
+```
+/mania                     # 查询绑定账号的 mania 最近成绩
+/mania peppy best 3        # 查询 peppy 的 mania BEST 前 3
+/mania peppy recent 1 4k   # 查询 peppy 的 mania 最近成绩，并附带 4K 变体信息
+/mania peppy best 5 +HD    # 仅筛选包含 HD 的 mania BEST 成绩
 ```
 
 ### 模式代码

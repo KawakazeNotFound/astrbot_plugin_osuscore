@@ -52,6 +52,14 @@ class OsuApiClient:
             raise NetworkError(f"API 请求失败: HTTP {response.status_code}")
         return response.json()
 
+    async def _request_json_post(self, url: str, headers: Optional[dict] = None, json_data: Optional[dict] = None) -> dict:
+        response = await self.client.post(url, headers=headers, json=json_data)
+        if response.status_code == 404:
+            raise NetworkError("目标资源不存在")
+        if response.status_code != 200:
+            raise NetworkError(f"API 请求失败: HTTP {response.status_code}")
+        return response.json()
+
     async def _request_public_json(self, url: str, not_found_message: str) -> dict:
         response = await self.client.get(url)
         if response.status_code == 404:
@@ -129,10 +137,66 @@ class OsuApiClient:
         }
 
         response = await self.client.get(url, headers=headers, params=params)
+        if response.status_code == 404:
+            raise NetworkError("未找到玩家成绩")
         if response.status_code != 200:
-            raise Exception(f"API error: {response.status_code}")
+            raise NetworkError(f"API 请求失败: HTTP {response.status_code}")
 
         return response.json()
+
+    async def get_rankings(
+        self,
+        mode: str,
+        ranking_type: str = "performance",
+        country: Optional[str] = None,
+        filter_mode: str = "all",
+        variant: Optional[str] = None,
+        spotlight: Optional[int] = None,
+        cursor: Optional[dict] = None,
+    ) -> Dict[str, Any]:
+        """获取排行榜数据。
+
+        mode: osu/taiko/fruits/mania
+        ranking_type: performance/score/country/charts
+        variant: mania 模式支持 4k/7k
+        """
+        headers = await self._get_headers()
+        url = f"{self.api_base}/rankings/{mode}/{ranking_type}"
+
+        params: Dict[str, Any] = {
+            "filter": filter_mode,
+        }
+        if country:
+            params["country"] = country
+        if variant:
+            params["variant"] = variant
+        if spotlight is not None:
+            params["spotlight"] = spotlight
+        if cursor:
+            params["cursor"] = cursor
+
+        return await self._request_json(url, headers=headers, params=params)
+
+    async def get_beatmap_attributes(
+        self,
+        beatmap_id: int,
+        mods: Optional[Union[int, list[str], list[dict]]] = None,
+        ruleset: Optional[str] = None,
+        ruleset_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """获取指定 ruleset 与 mods 下的谱面难度属性。"""
+        headers = await self._get_headers()
+        url = f"{self.api_base}/beatmaps/{beatmap_id}/attributes"
+
+        payload: Dict[str, Any] = {}
+        if mods is not None:
+            payload["mods"] = mods
+        if ruleset:
+            payload["ruleset"] = ruleset
+        if ruleset_id is not None:
+            payload["ruleset_id"] = ruleset_id
+
+        return await self._request_json_post(url, headers=headers, json_data=payload)
 
     async def get_beatmap(self, beatmap_id: int) -> Dict[str, Any]:
         """获取谱面信息"""

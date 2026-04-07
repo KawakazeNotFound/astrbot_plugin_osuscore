@@ -111,6 +111,12 @@ python main.py
 /pr peppy :1 +HD
 /pr peppy :2 +DTHD
 
+# 查询 mania 成绩
+/mania
+/mania peppy best 3
+/mania peppy recent 1 4k
+/mania peppy best 5 +HD
+
 # 模式代码
 # 0 = Standard (默认)
 # 1 = Taiko

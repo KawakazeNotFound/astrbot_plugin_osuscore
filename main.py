@@ -13,7 +13,7 @@ from .database import Database
 from .draw import ScoreImageGenerator
 from .exceptions import NetworkError
 from .info_renderer import draw_info
-from .utils import parse_command_args, NGM
+from .utils import parse_command_args, parse_mania_command_args, NGM
 from .data_adapter import adapt_api_data_for_image
 from .pp_calculator import calculate_all_pp_info
 
@@ -301,6 +301,142 @@ class OsuScorePlugin(Star):
             logger.error(f"查询用户资料失败: {e}")
             yield event.plain_result(f"❌ 查询失败: {str(e)}")
 
+    @filter.command("mania")
+    async def mania_score(self, event: AstrMessageEvent):
+        """查询 osu!mania 成绩。
+
+        使用:
+            /mania [用户名] [recent|best] [数量] [4k|7k] [+mods]
+
+        示例:
+            /mania
+            /mania peppy best 3
+            /mania peppy recent 1 4k
+            /mania peppy best 5 +HD
+        """
+        if not self._is_api_client_ready():
+            yield event.plain_result("❌ OSU API 未配置，请检查插件配置")
+            return
+        assert self.api_client is not None
+
+        user_id = event.get_sender_id()
+        message = event.message_str.strip()
+        if message.lower().startswith("mania"):
+            message = message[5:].strip()
+
+        args = parse_mania_command_args(message)
+        username = args.get("username")
+        scope = args.get("scope", "recent")
+        limit = int(args.get("limit", 1))
+        variant = args.get("variant")
+        required_mods = args.get("mods", [])
+
+        bound_user_data = await self.db.get_user(user_id)
+
+        try:
+            if not username:
+                if not bound_user_data:
+                    yield event.plain_result("❌ 未找到绑定的账号，请先使用 /bind 绑定\n使用: /bind <osuid或用户名>")
+                    return
+                osu_id = int(bound_user_data["osu_id"])
+                username = str(bound_user_data.get("osu_name", ""))
+                mania_user_info = await self.api_client.get_user(str(osu_id), mode="mania")
+            else:
+                mania_user_info = await self.api_client.get_user(username, mode="mania")
+                osu_id = int(mania_user_info["id"])
+
+            # 有 mod 过滤时扩大拉取窗口，提升命中率。
+            fetch_limit = min(50, max(limit, limit * 5 if required_mods else limit))
+            scores = await self.api_client.get_user_scores(
+                osu_id,
+                mode="mania",
+                scope=scope,
+                limit=fetch_limit,
+                include_failed=False,
+            )
+
+            if required_mods:
+                scores = [s for s in scores if self._score_has_mods(s, required_mods)]
+
+            if not scores:
+                if required_mods:
+                    yield event.plain_result(
+                        f"❌ 未找到满足 +{''.join(required_mods)} 的 mania {scope} 成绩"
+                    )
+                else:
+                    yield event.plain_result(f"❌ 未找到 mania {scope} 成绩")
+                return
+
+            selected_scores = scores[:limit]
+            variant_summary = self._format_mania_variant_summary(mania_user_info, variant)
+
+            # 多条结果优先以文本列表返回，避免一次发送过多图片。
+            if limit > 1:
+                yield event.plain_result(self._build_mania_score_list_text(
+                    mania_user_info,
+                    selected_scores,
+                    scope,
+                    variant_summary,
+                ))
+                return
+
+            score = selected_scores[0]
+
+            user_info, score_data, beatmap_data = adapt_api_data_for_image(score)
+
+            stats = mania_user_info.get("statistics", {})
+            user_info["global_rank"] = stats.get("global_rank", user_info.get("global_rank", 0))
+            user_info["country_rank"] = stats.get("country_rank", user_info.get("country_rank", 0))
+            user_info["pp"] = stats.get("pp", user_info.get("pp", 0))
+
+            # 对 mania 使用官方 attributes 接口补全模式难度属性。
+            try:
+                attr_resp = await self.api_client.get_beatmap_attributes(
+                    beatmap_id=int(beatmap_data.get("id") or beatmap_data.get("beatmap_id") or 0),
+                    mods=score_data.get("mods", []),
+                    ruleset="mania",
+                )
+                attributes = attr_resp.get("attributes", {}) if isinstance(attr_resp, dict) else {}
+                if attributes.get("star_rating"):
+                    beatmap_data["difficulty_rating"] = attributes.get("star_rating")
+                if attributes.get("max_combo"):
+                    score_data["map_max_combo"] = attributes.get("max_combo")
+            except Exception as e:
+                logger.warning(f"Failed to fetch mania beatmap attributes: {e}")
+
+            try:
+                pp_info = await calculate_all_pp_info(
+                    beatmap_id=beatmap_data.get("id"),
+                    beatmapset_id=beatmap_data.get("beatmapset_id"),
+                    mods=score_data.get("mods", []),
+                    accuracy=score_data.get("accuracy", 0),
+                    max_combo=score_data.get("max_combo", 0),
+                    statistics=score_data.get("statistics", {}),
+                    mode=int(score_data.get("mode", 3)),
+                )
+                score_data.update(pp_info)
+            except Exception as e:
+                logger.warning(f"Failed to calculate mania PP: {e}")
+
+            img_bytes = await self.img_generator.generate_score_image(
+                user_info,
+                score_data,
+                beatmap_data,
+            )
+
+            os.makedirs("./osuscore_temp", exist_ok=True)
+            tmp_path = f"./osuscore_temp/mania_{int(time.time() * 1000)}.png"
+            with open(tmp_path, "wb") as f:
+                f.write(img_bytes.getvalue())
+
+            if variant_summary:
+                yield event.plain_result(variant_summary)
+            yield event.image_result(tmp_path)
+
+        except Exception as e:
+            logger.error(f"查询 mania 成绩失败: {e}")
+            yield event.plain_result(f"❌ 查询失败: {str(e)}")
+
     @filter.command("unbind")
     async def unbind_account(self, event: AstrMessageEvent):
         """
@@ -336,6 +472,74 @@ class OsuScorePlugin(Star):
             "3": "mania"
         }
         return mode_map.get(mode, "osu")
+
+    def _score_has_mods(self, score: dict, required_mods: list[str]) -> bool:
+        """检查成绩是否包含目标 mods（子集匹配）。"""
+        if not required_mods:
+            return True
+
+        score_mods = {
+            str(mod.get("acronym", "")).upper()
+            for mod in score.get("mods", [])
+            if isinstance(mod, dict)
+        }
+        return set(m.upper() for m in required_mods).issubset(score_mods)
+
+    def _format_mania_variant_summary(self, mania_user_info: dict, variant: str | None) -> str | None:
+        """格式化 mania 变体信息（4k/7k）。"""
+        if not variant:
+            return None
+
+        statistics = mania_user_info.get("statistics", {})
+        variants = statistics.get("variants") or []
+        for item in variants:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("variant", "")).lower() != variant.lower():
+                continue
+
+            pp = float(item.get("pp") or 0)
+            global_rank = item.get("global_rank")
+            country_rank = item.get("country_rank")
+            gr = f"#{global_rank:,}" if isinstance(global_rank, int) and global_rank > 0 else "-"
+            cr = f"#{country_rank:,}" if isinstance(country_rank, int) and country_rank > 0 else "-"
+            return f"🎹 {variant.upper()} 变体 | PP: {pp:.2f} | 全球: {gr} | 地区: {cr}"
+
+        return f"⚠️ 未获取到 {variant.upper()} 变体排名数据"
+
+    def _build_mania_score_list_text(self, mania_user_info: dict, scores: list[dict], scope: str, variant_summary: str | None) -> str:
+        """构建 mania 多条成绩文本。"""
+        username = str(mania_user_info.get("username", "Unknown"))
+        lines = [f"✅ {username} 的 mania {scope} 成绩（共 {len(scores)} 条）"]
+
+        for index, score in enumerate(scores, start=1):
+            beatmap = score.get("beatmap", {})
+            beatmapset = score.get("beatmapset", {})
+
+            artist = beatmapset.get("artist", "?")
+            title = beatmapset.get("title", "?")
+            version = beatmap.get("version", "?")
+
+            rank = score.get("rank", "?")
+            pp = float(score.get("pp") or 0)
+            acc = float(score.get("accuracy") or 0) * 100
+
+            mods = "".join(
+                str(m.get("acronym", ""))
+                for m in score.get("mods", [])
+                if isinstance(m, dict)
+            )
+            mods_text = f"+{mods}" if mods else "NM"
+
+            lines.append(
+                f"{index}. [{rank}] {artist} - {title} [{version}] | {pp:.2f}pp | {acc:.2f}% | {mods_text}"
+            )
+
+        if variant_summary:
+            lines.append("")
+            lines.append(variant_summary)
+
+        return "\n".join(lines)
 
     async def _parse_info_state(self, platform_user_id: str, raw_args: str) -> dict:
         """按参考 split_msg 行为解析 /info 参数。"""

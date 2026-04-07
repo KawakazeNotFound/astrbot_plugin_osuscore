@@ -180,7 +180,21 @@ pip install -r requirements.txt
 ```
 /bind your_osu_username    # 绑定账号
 /pr                        # 查询最近成绩（会生成图片）
+/mania                     # 查询 mania 最近成绩
+/mania your_name best 3    # 查询 mania 最佳成绩前3
+/mania your_name recent 1 4k +HD  # 查询 mania 最近成绩，带4K变体和Mod过滤
 /score 1234567             # 查询指定谱面成绩
+```
+
+## 方法4.5: mania 参数解析测试
+
+```bash
+python test_mania.py
+```
+
+预期输出:
+```
+[OK] mania 参数解析测试全部通过
 ```
 
 ### 4.4 检查图片生成
