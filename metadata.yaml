@@ -1,0 +1,6 @@
+name: osuscore
+desc: OSU查分插件 - 查询玩家最近成绩和最佳成绩
+version: v0.1.0
+author: claude
+repo: https://github.com/user/astrbot_plugin_osuscore
+display_name: OSU查分

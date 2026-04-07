@@ -1,0 +1,15 @@
+{
+    "osu_client_id": {
+        "type": "integer",
+        "description": "OSU! API 客户端 ID"
+    },
+    "osu_client_secret": {
+        "type": "string",
+        "description": "OSU! API 客户端密钥"
+    },
+    "db_path": {
+        "type": "string",
+        "description": "SQLite 数据库路径",
+        "default": "./osuscore.db"
+    }
+}
