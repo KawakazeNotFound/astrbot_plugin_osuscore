@@ -563,15 +563,8 @@ class ScoreImageGenerator:
             fill=star_color
         )
         
-        # 评价/排名 (772, 185) - 使用Venera字体
-        rank = score_info.get("rank", "F")
-        draw.text(
-            (772, 185),
-            rank,
-            font=self.assets.get_font('venera_60'),
-            anchor="mm",
-            fill=(255, 255, 255, 255)
-        )
+        # 评价/排名 (772, 185) - 移动到了 _draw_rank_icon 中使用图片绘制
+        pass
         
         # 分数 (880, 165)
         score_value = score_info.get("score", 0)
@@ -851,10 +844,30 @@ class ScoreImageGenerator:
                 im.alpha_composite(mod_icon, (x, y))
     
     async def _draw_rank_icon(self, im: Image.Image, score_info: Dict[str, Any]):
-        """绘制排名图标 - 不显示大图标，nonebot在(772, 185)位置用文字"""
-        # nonebot使用Venera字体直接绘制排名文字，不是图标
-        # 所以这个函数不需要做任何事，文字已经在_draw_score_info中绘制
-        pass
+        """绘制排名大图标，替换掉原来的Venera文本"""
+        rank = score_info.get("rank", "F")
+        if rank in self.assets.rank_icons:
+            rank_icon = self.assets.rank_icons[rank]
+            # 原文字中心点坐标是 (772, 185)
+            # 等比例缩放图标让高度大概保持在合适大小 (例如 90)
+            target_h = 90
+            ratio = target_h / rank_icon.height
+            target_w = int(rank_icon.width * ratio)
+            
+            scaled_icon = rank_icon.resize((target_w, target_h), Image.Resampling.LANCZOS)
+            x = int(772 - target_w / 2)
+            y = int(185 - target_h / 2)
+            im.alpha_composite(scaled_icon, (x, y))
+        else:
+            # 万一没有图片就使用原字体作为后备
+            draw = ImageDraw.Draw(im)
+            draw.text(
+                (772, 185),
+                rank,
+                font=self.assets.get_font('venera_60'),
+                anchor="mm",
+                fill=(255, 255, 255, 255)
+            )
     
     async def _generate_simple(
         self,
