@@ -112,6 +112,8 @@ class AssetsLoader:
         self.mod_icons = {}
         self.rank_icons = {}
         self.mode_backgrounds = {}
+        self.flags = {}
+        self.supporter_icon = None
         self.star_mapper = StarColorMapper()
         self._load_assets()
     
@@ -126,8 +128,24 @@ class AssetsLoader:
             self._load_rank_icons()
             # 加载游戏模式背景
             self._load_mode_backgrounds()
+            # 加载旗帜
+            self._load_flags()
+            # 加载 Supporter 标识
+            supporter_file = WORK_DIR / "supporter.png"
+            if supporter_file.exists():
+                self.supporter_icon = Image.open(supporter_file).convert("RGBA").resize((30, 30), Image.Resampling.LANCZOS)
         except Exception as e:
             print(f"Warning: Failed to load some assets: {e}")
+            
+    def _load_flags(self):
+        """加载国旗图标"""
+        flags_dir = ASSETS_DIR / "flags"
+        if flags_dir.exists():
+            for flag_file in flags_dir.glob("*.png"):
+                try:
+                    self.flags[flag_file.stem.upper()] = Image.open(flag_file).convert("RGBA").resize((66, 45), Image.Resampling.LANCZOS)
+                except Exception as e:
+                    print(f"Warning: Failed to load flag {flag_file.name}: {e}")
     
     def _load_fonts(self):
         """加载字体文件"""
@@ -339,6 +357,48 @@ async def download_user_avatar(avatar_url: str, user_id: int) -> Optional[Image.
 
 
 
+async def download_user_cover(cover_url: str, user_id: int) -> Optional[Image.Image]:
+    """下载用户主页Banner (Cover)
+    
+    Args:
+        cover_url: Cover URL
+        user_id: 用户ID
+        
+    Returns:
+        图片对象，失败返回None
+    """
+    if not cover_url:
+        return None
+    
+    # 检查缓存
+    cache_path = CACHE_DIR / f"user_cover_{user_id}.png"
+    if cache_path.exists():
+        try:
+            return Image.open(cache_path).convert("RGBA")
+        except Exception:
+            pass
+    
+    # 下载Banner
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            resp = await client.get(cover_url)
+            resp.raise_for_status()
+            
+            img = Image.open(BytesIO(resp.content)).convert("RGBA")
+            
+            # 保存到缓存
+            try:
+                img.save(cache_path, "PNG")
+            except Exception:
+                pass
+            
+            return img
+    except Exception as e:
+        print(f"Failed to download user cover: {e}")
+        return None
+
+
+
 def draw_text_with_outline(
     draw: ImageDraw.ImageDraw,
     position: tuple[int, int],
@@ -436,6 +496,23 @@ class ScoreImageGenerator:
             if mode_bg.size != (self.width, self.height):
                 mode_bg = mode_bg.resize((self.width, self.height), Image.Resampling.LANCZOS)
             im.alpha_composite(mode_bg, (0, 0))
+            
+        # 第2.5层：用户个人Banner背景（如果存在 cover_url）
+        user_id = user_info.get('id')
+        cover_url = user_info.get('cover_url')
+        if cover_url and user_id:
+            try:
+                user_bg = await download_user_cover(cover_url, user_id)
+                if user_bg:
+                    # 裁剪为固定大小的矩形，适应左下方黑框大小 (533, 213)
+                    user_bg_cropped = await crop_bg((533, 213), user_bg)
+                    # 降低亮度以确保文字清晰 (原项目 enhance(2/4.0))
+                    user_bg_dimmed = ImageEnhance.Brightness(user_bg_cropped).enhance(0.5)
+                    user_bg_fillet = draw_fillet(user_bg_dimmed, 15)
+                    # 贴在左下方用户资料区域 (17, 500)
+                    im.alpha_composite(user_bg_fillet, (17, 500))
+            except Exception as e:
+                print(f"Failed to process user cover banner: {e}")
         
         # 第3层：绘制文本和信息
         await self._draw_score_info(im, draw, user_info, score_info, beatmap_info)
@@ -461,7 +538,8 @@ class ScoreImageGenerator:
                     im.alpha_composite(avatar_img, (27, 532))
             except Exception as e:
                 print(f"Failed to composite avatar: {e}")
-        
+                
+        # 去除已移动的 第6.1层
         # 转换为BytesIO
         img_bytes = BytesIO()
         im.save(img_bytes, format="PNG")
@@ -597,13 +675,21 @@ class ScoreImageGenerator:
             )
         
         # 玩家名 (208, 550)
+        username = user_info.get('username', '???')
+        font_30 = self.assets.get_font('torus_sb_30')
         draw.text(
             (208, 550),
-            user_info.get('username', '???'),
-            font=self.assets.get_font('torus_sb_30'),
+            username,
+            font=font_30,
             anchor="lm",
             fill=(255, 255, 255, 255)
         )
+        
+        # Supporter 图标
+        is_supporter = user_info.get('is_supporter', False)
+        if is_supporter and self.assets.supporter_icon:
+            name_width = font_30.getlength(username)
+            im.alpha_composite(self.assets.supporter_icon, (int(208 + name_width + 10), 550 - 15))
         
         # 全球排名 - 标签在(883, 260)，数值在(985, 260)
         global_rank = user_info.get('global_rank')
@@ -623,7 +709,12 @@ class ScoreImageGenerator:
                 fill=(255, 255, 255, 255)
             )
         
-        # 地区排名 (283, 630)
+        # 地区旗帜与地区排名 (208, 608)
+        country_code = user_info.get('country_code', 'XX').upper()
+        if country_code in self.assets.flags:
+            # 高度尺寸为45，中点为(608+22)~630
+            im.alpha_composite(self.assets.flags[country_code], (208, 608))
+            
         country_rank = user_info.get('country_rank')
         if country_rank and country_rank > 0:
             draw.text(
