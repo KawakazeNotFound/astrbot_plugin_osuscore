@@ -43,7 +43,7 @@ class OsuScorePlugin(Star):
         """插件初始化"""
         if self.client_id and self.client_secret:
             self.api_client = OsuApiClient(self.client_id, self.client_secret)
-            logger.success("OSU API 客户端初始化成功")
+            logger.info("OSU API 客户端初始化成功")
 
     def _is_api_client_ready(self) -> bool:
         """检查 API 客户端是否可用"""
