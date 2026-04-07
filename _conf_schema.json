@@ -1,6 +1,6 @@
 {
     "osu_client_id": {
-        "type": "integer",
+        "type": "int",
         "description": "OSU! API 客户端 ID"
     },
     "osu_client_secret": {
