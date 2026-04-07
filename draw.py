@@ -398,6 +398,56 @@ async def download_user_cover(cover_url: str, user_id: int) -> Optional[Image.Im
         return None
 
 
+async def download_beatmap_cover(covers: Dict[str, str]) -> Optional[Image.Image]:
+    """下载谱面铺面的背景图片
+    
+    Args:
+        covers: 谱面封面信息字典，包含cover/card等URL
+        
+    Returns:
+        图片对象，失败返回None
+    """
+    if not covers:
+        return None
+    
+    # 优先使用 cover@2x，然后是 cover
+    cover_url = covers.get('cover@2x') or covers.get('cover')
+    if not cover_url:
+        return None
+    
+    # 生成缓存文件名（从URL提取beatmapset ID）
+    try:
+        beatmapset_id = cover_url.split('/')[-2]  # 通常格式: https://b.ppy.sh/thumb/{beatmapset_id}l.jpg
+    except:
+        beatmapset_id = "unknown"
+    
+    # 检查缓存
+    cache_path = CACHE_DIR / f"beatmap_cover_{beatmapset_id}.png"
+    if cache_path.exists():
+        try:
+            return Image.open(cache_path).convert("RGBA")
+        except Exception:
+            pass
+    
+    # 下载背景图
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            resp = await client.get(cover_url)
+            resp.raise_for_status()
+            
+            img = Image.open(BytesIO(resp.content)).convert("RGBA")
+            
+            # 保存到缓存
+            try:
+                img.save(cache_path, "PNG")
+            except Exception:
+                pass
+            
+            return img
+    except Exception as e:
+        print(f"Failed to download beatmap cover: {e}")
+        return None
+
 
 def draw_text_with_outline(
     draw: ImageDraw.ImageDraw,
@@ -474,10 +524,10 @@ class ScoreImageGenerator:
         im = Image.new("RGBA", (self.width, self.height))
         draw = ImageDraw.Draw(im)
         
-        # 第1层：下载并处理谱面背景
-        beatmapset_id = beatmap_info.get("beatmapset_id")
-        if beatmapset_id:
-            bg_img = await download_beatmap_cover(beatmapset_id)
+        # 第1层：下载并处理谱面背景（全屏）
+        covers = beatmap_info.get("covers", {})
+        if covers:
+            bg_img = await download_beatmap_cover(covers)
             if bg_img:
                 # 裁剪到合适尺寸
                 bg_cropped = await crop_bg((self.width, self.height), bg_img)
@@ -496,6 +546,23 @@ class ScoreImageGenerator:
             if mode_bg.size != (self.width, self.height):
                 mode_bg = mode_bg.resize((self.width, self.height), Image.Resampling.LANCZOS)
             im.alpha_composite(mode_bg, (0, 0))
+        
+        # 第2.3层：红框区域的beatmap背景（左上方谱面信息卡片）
+        try:
+            covers = beatmap_info.get("covers", {})
+            if covers:
+                card_bg = await download_beatmap_cover(covers)
+                if card_bg:
+                    # 裁剪到红框区域大小（宽约640, 高约270）
+                    card_bg_cropped = await crop_bg((640, 270), card_bg)
+                    # 降低亮度，避免覆盖文字
+                    card_bg_dimmed = ImageEnhance.Brightness(card_bg_cropped).enhance(0.35)
+                    # 添加圆角效果
+                    card_bg_fillet = draw_fillet(card_bg_dimmed, 10)
+                    # 贴在左上方 (30, 50)
+                    im.alpha_composite(card_bg_fillet, (30, 50))
+        except Exception as e:
+            print(f"Failed to apply beatmap background to card: {e}")
             
         # 第2.5层：用户个人Banner背景（如果存在 cover_url）
         user_id = user_info.get('id')
@@ -576,11 +643,11 @@ class ScoreImageGenerator:
             fill=(255, 255, 255, 255)
         )
         
-        # 谱面版本 (65, 80) - 在模式图标右侧
+        # 谱面版本（难度标签） (65, 70)
         version = beatmap_info.get('version', '???')
         draw_text_with_outline(
             draw,
-            (65, 80),
+            (65, 70),
             version,
             self.assets.get_font('torus_sb_15'),
             fill=(255, 255, 255, 255),
@@ -626,7 +693,7 @@ class ScoreImageGenerator:
             anchor="lm"
         )
         
-        # 星级 (556, 85)
+        # 星级 (600, 70) - 与难度版本同一水平线
         difficulty = beatmap_info.get("difficulty_rating", 0)
         if difficulty < 6.5:
             star_color = (0, 0, 0, 255)
@@ -634,7 +701,7 @@ class ScoreImageGenerator:
             star_color = (255, 217, 102, 255)
         
         draw.text(
-            (556, 85),
+            (600, 70),
             f"★{difficulty:.2f}",
             font=self.assets.get_font('torus_sb_20'),
             anchor="lm",
