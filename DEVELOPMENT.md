@@ -37,7 +37,7 @@
 使用: /mania [用户名] [recent|best] [数量] [4k|7k] [+mods]
 功能:
     1. 查询 mania 最近或最佳成绩
-    2. 支持多条成绩文本汇总（limit > 1）
+    2. 支持多条成绩连续图片输出（limit > 1，最多前5条）
     3. 单条成绩自动生成图片
     4. 支持 4k/7k 变体信息展示
     5. 通过官方 Beatmap Attributes 接口补全 mania 难度属性

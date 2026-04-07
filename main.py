@@ -369,69 +369,63 @@ class OsuScorePlugin(Star):
 
             selected_scores = scores[:limit]
             variant_summary = self._format_mania_variant_summary(mania_user_info, variant)
-
-            # 多条结果优先以文本列表返回，避免一次发送过多图片。
-            if limit > 1:
-                yield event.plain_result(self._build_mania_score_list_text(
-                    mania_user_info,
-                    selected_scores,
-                    scope,
-                    variant_summary,
-                ))
-                return
-
-            score = selected_scores[0]
-
-            user_info, score_data, beatmap_data = adapt_api_data_for_image(score)
-
-            stats = mania_user_info.get("statistics", {})
-            user_info["global_rank"] = stats.get("global_rank", user_info.get("global_rank", 0))
-            user_info["country_rank"] = stats.get("country_rank", user_info.get("country_rank", 0))
-            user_info["pp"] = stats.get("pp", user_info.get("pp", 0))
-
-            # 对 mania 使用官方 attributes 接口补全模式难度属性。
-            try:
-                attr_resp = await self.api_client.get_beatmap_attributes(
-                    beatmap_id=int(beatmap_data.get("id") or beatmap_data.get("beatmap_id") or 0),
-                    mods=score_data.get("mods", []),
-                    ruleset="mania",
-                )
-                attributes = attr_resp.get("attributes", {}) if isinstance(attr_resp, dict) else {}
-                if attributes.get("star_rating"):
-                    beatmap_data["difficulty_rating"] = attributes.get("star_rating")
-                if attributes.get("max_combo"):
-                    score_data["map_max_combo"] = attributes.get("max_combo")
-            except Exception as e:
-                logger.warning(f"Failed to fetch mania beatmap attributes: {e}")
-
-            try:
-                pp_info = await calculate_all_pp_info(
-                    beatmap_id=beatmap_data.get("id"),
-                    beatmapset_id=beatmap_data.get("beatmapset_id"),
-                    mods=score_data.get("mods", []),
-                    accuracy=score_data.get("accuracy", 0),
-                    max_combo=score_data.get("max_combo", 0),
-                    statistics=score_data.get("statistics", {}),
-                    mode=int(score_data.get("mode", 3)),
-                )
-                score_data.update(pp_info)
-            except Exception as e:
-                logger.warning(f"Failed to calculate mania PP: {e}")
-
-            img_bytes = await self.img_generator.generate_score_image(
-                user_info,
-                score_data,
-                beatmap_data,
-            )
-
-            os.makedirs("./osuscore_temp", exist_ok=True)
-            tmp_path = f"./osuscore_temp/mania_{int(time.time() * 1000)}.png"
-            with open(tmp_path, "wb") as f:
-                f.write(img_bytes.getvalue())
-
             if variant_summary:
                 yield event.plain_result(variant_summary)
-            yield event.image_result(tmp_path)
+
+            if limit > 5:
+                yield event.plain_result("⚠️ 为避免刷屏，mania 单次最多发送前 5 条图片结果")
+                selected_scores = selected_scores[:5]
+
+            stats = mania_user_info.get("statistics", {})
+
+            for index, score in enumerate(selected_scores, start=1):
+                user_info, score_data, beatmap_data = adapt_api_data_for_image(score)
+
+                user_info["global_rank"] = stats.get("global_rank", user_info.get("global_rank", 0))
+                user_info["country_rank"] = stats.get("country_rank", user_info.get("country_rank", 0))
+                user_info["pp"] = stats.get("pp", user_info.get("pp", 0))
+
+                # 对 mania 使用官方 attributes 接口补全模式难度属性。
+                try:
+                    attr_resp = await self.api_client.get_beatmap_attributes(
+                        beatmap_id=int(beatmap_data.get("id") or beatmap_data.get("beatmap_id") or 0),
+                        mods=score_data.get("mods", []),
+                        ruleset="mania",
+                    )
+                    attributes = attr_resp.get("attributes", {}) if isinstance(attr_resp, dict) else {}
+                    if attributes.get("star_rating"):
+                        beatmap_data["difficulty_rating"] = attributes.get("star_rating")
+                    if attributes.get("max_combo"):
+                        score_data["map_max_combo"] = attributes.get("max_combo")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch mania beatmap attributes: {e}")
+
+                try:
+                    pp_info = await calculate_all_pp_info(
+                        beatmap_id=beatmap_data.get("id"),
+                        beatmapset_id=beatmap_data.get("beatmapset_id"),
+                        mods=score_data.get("mods", []),
+                        accuracy=score_data.get("accuracy", 0),
+                        max_combo=score_data.get("max_combo", 0),
+                        statistics=score_data.get("statistics", {}),
+                        mode=int(score_data.get("mode", 3)),
+                    )
+                    score_data.update(pp_info)
+                except Exception as e:
+                    logger.warning(f"Failed to calculate mania PP: {e}")
+
+                img_bytes = await self.img_generator.generate_score_image(
+                    user_info,
+                    score_data,
+                    beatmap_data,
+                )
+
+                os.makedirs("./osuscore_temp", exist_ok=True)
+                tmp_path = f"./osuscore_temp/mania_{int(time.time() * 1000)}_{index}.png"
+                with open(tmp_path, "wb") as f:
+                    f.write(img_bytes.getvalue())
+
+                yield event.image_result(tmp_path)
 
         except Exception as e:
             logger.error(f"查询 mania 成绩失败: {e}")
@@ -506,40 +500,6 @@ class OsuScorePlugin(Star):
             return f"🎹 {variant.upper()} 变体 | PP: {pp:.2f} | 全球: {gr} | 地区: {cr}"
 
         return f"⚠️ 未获取到 {variant.upper()} 变体排名数据"
-
-    def _build_mania_score_list_text(self, mania_user_info: dict, scores: list[dict], scope: str, variant_summary: str | None) -> str:
-        """构建 mania 多条成绩文本。"""
-        username = str(mania_user_info.get("username", "Unknown"))
-        lines = [f"✅ {username} 的 mania {scope} 成绩（共 {len(scores)} 条）"]
-
-        for index, score in enumerate(scores, start=1):
-            beatmap = score.get("beatmap", {})
-            beatmapset = score.get("beatmapset", {})
-
-            artist = beatmapset.get("artist", "?")
-            title = beatmapset.get("title", "?")
-            version = beatmap.get("version", "?")
-
-            rank = score.get("rank", "?")
-            pp = float(score.get("pp") or 0)
-            acc = float(score.get("accuracy") or 0) * 100
-
-            mods = "".join(
-                str(m.get("acronym", ""))
-                for m in score.get("mods", [])
-                if isinstance(m, dict)
-            )
-            mods_text = f"+{mods}" if mods else "NM"
-
-            lines.append(
-                f"{index}. [{rank}] {artist} - {title} [{version}] | {pp:.2f}pp | {acc:.2f}% | {mods_text}"
-            )
-
-        if variant_summary:
-            lines.append("")
-            lines.append(variant_summary)
-
-        return "\n".join(lines)
 
     async def _parse_info_state(self, platform_user_id: str, raw_args: str) -> dict:
         """按参考 split_msg 行为解析 /info 参数。"""
