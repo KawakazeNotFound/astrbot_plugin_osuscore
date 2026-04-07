@@ -475,9 +475,9 @@ class ScoreImageGenerator:
         draw = ImageDraw.Draw(im)
         
         # 第1层：下载并处理谱面背景（全屏）
-        covers = beatmap_info.get("covers", {})
-        if covers:
-            bg_img = await download_beatmap_cover(covers)
+        beatmapset_id = beatmap_info.get("beatmapset_id")
+        if beatmapset_id:
+            bg_img = await download_beatmap_cover(beatmapset_id)
             if bg_img:
                 # 裁剪到合适尺寸
                 bg_cropped = await crop_bg((self.width, self.height), bg_img)
@@ -499,9 +499,9 @@ class ScoreImageGenerator:
         
         # 第2.3层：红框区域的beatmap背景（左上方谱面信息卡片）
         try:
-            covers = beatmap_info.get("covers", {})
-            if covers:
-                card_bg = await download_beatmap_cover(covers)
+            beatmapset_id = beatmap_info.get("beatmapset_id")
+            if beatmapset_id:
+                card_bg = await download_beatmap_cover(beatmapset_id)
                 if card_bg:
                     # 裁剪到红框区域大小（宽约640, 高约220，不覆盖下面的5个图标）
                     card_bg_cropped = await crop_bg((640, 220), card_bg)
