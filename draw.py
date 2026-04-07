@@ -770,8 +770,8 @@ class ScoreImageGenerator:
         # ============== 新增：绘制左侧 Map Stats (CS, HP, OD, AR, SR) ==============
         # 数据获取
         cs = beatmap_info.get("cs", 0)
-        hp = beatmap_info.get("drain", 0)
-        od = beatmap_info.get("accuracy", 0)
+        hp = beatmap_info.get("hp", beatmap_info.get("drain", 0))
+        od = beatmap_info.get("od", beatmap_info.get("accuracy", 0))
         ar = beatmap_info.get("ar", 0)
         sr = beatmap_info.get("difficulty_rating", 0)
         
@@ -806,7 +806,33 @@ class ScoreImageGenerator:
             anchor="mm",
             fill=(255, 255, 255, 255)
         )
-    
+        
+        # ============== 新增：上侧 5个图标数据 (时间, BPM, 单点, 滑条, 大回环) ==============
+        total_length = beatmap_info.get("total_length", 0)
+        bpm = beatmap_info.get("bpm", 0)
+        circles = beatmap_info.get("count_circles", 0)
+        sliders = beatmap_info.get("count_sliders", 0)
+        spinners = beatmap_info.get("count_spinners", 0)
+        
+        m, s = divmod(total_length, 60)
+        time_str = f"{m}:{s:02d}"
+        
+        bpm_str = f"{bpm:.1f}" if isinstance(bpm, float) else str(bpm)
+        
+        diff_info = [time_str, bpm_str, circles, sliders]
+        if str(score_info.get("mode", "0")) != "3":  # 非 Mania 模式添加大回环
+            diff_info.append(spinners)
+            
+        for num, val in enumerate(diff_info):
+            draw_text_with_outline(
+                draw,
+                (70 + 120 * num, 300),
+                str(val),
+                self.assets.get_font('torus_r_20'),
+                fill=self.accent_color,
+                anchor="lm"
+            )
+            
     async def _draw_mod_icons(self, im: Image.Image, score_info: Dict[str, Any]):
         """绘制Mod图标 - 按照nonebot坐标 (880 + 50*n, 100)"""
         mods = score_info.get("mods", [])
