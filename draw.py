@@ -553,8 +553,8 @@ class ScoreImageGenerator:
             if covers:
                 card_bg = await download_beatmap_cover(covers)
                 if card_bg:
-                    # 裁剪到红框区域大小（宽约640, 高约270）
-                    card_bg_cropped = await crop_bg((640, 270), card_bg)
+                    # 裁剪到红框区域大小（宽约640, 高约220，不覆盖下面的5个图标）
+                    card_bg_cropped = await crop_bg((640, 220), card_bg)
                     # 降低亮度，避免覆盖文字
                     card_bg_dimmed = ImageEnhance.Brightness(card_bg_cropped).enhance(0.35)
                     # 添加圆角效果
