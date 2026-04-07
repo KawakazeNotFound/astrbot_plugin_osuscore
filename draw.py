@@ -398,56 +398,6 @@ async def download_user_cover(cover_url: str, user_id: int) -> Optional[Image.Im
         return None
 
 
-async def download_beatmap_cover(covers: Dict[str, str]) -> Optional[Image.Image]:
-    """下载谱面铺面的背景图片
-    
-    Args:
-        covers: 谱面封面信息字典，包含cover/card等URL
-        
-    Returns:
-        图片对象，失败返回None
-    """
-    if not covers:
-        return None
-    
-    # 优先使用 cover@2x，然后是 cover
-    cover_url = covers.get('cover@2x') or covers.get('cover')
-    if not cover_url:
-        return None
-    
-    # 生成缓存文件名（从URL提取beatmapset ID）
-    try:
-        beatmapset_id = cover_url.split('/')[-2]  # 通常格式: https://b.ppy.sh/thumb/{beatmapset_id}l.jpg
-    except:
-        beatmapset_id = "unknown"
-    
-    # 检查缓存
-    cache_path = CACHE_DIR / f"beatmap_cover_{beatmapset_id}.png"
-    if cache_path.exists():
-        try:
-            return Image.open(cache_path).convert("RGBA")
-        except Exception:
-            pass
-    
-    # 下载背景图
-    try:
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-            resp = await client.get(cover_url)
-            resp.raise_for_status()
-            
-            img = Image.open(BytesIO(resp.content)).convert("RGBA")
-            
-            # 保存到缓存
-            try:
-                img.save(cache_path, "PNG")
-            except Exception:
-                pass
-            
-            return img
-    except Exception as e:
-        print(f"Failed to download beatmap cover: {e}")
-        return None
-
 
 def draw_text_with_outline(
     draw: ImageDraw.ImageDraw,
@@ -654,32 +604,31 @@ class ScoreImageGenerator:
         v_width = version_font.getlength(version)
         
         # 绘制半透明圆角矩形作为难度标签背景
-        # 高度约30，圆角15，宽度自适应 (增加透明度至70，符合"一点点"不透明的要求)
-        diff_bg = Image.new("RGBA", (int(v_width + 30), 30), (0, 0, 0, 70))
-        diff_bg = draw_fillet(diff_bg, 15)
+        diff_bg = Image.new("RGBA", (int(v_width + 40), 30), (0, 0, 0, 0))
+        ImageDraw.Draw(diff_bg).rounded_rectangle((0, 0, int(v_width + 40), 30), radius=15, fill=(0, 0, 0, 180))
         im.alpha_composite(diff_bg, (50, 55))
         
         draw_text_with_outline(
             draw,
-            (65, 70),
+            (70, 70),
             version,
             version_font,
             fill=diff_color,
             anchor="lm"
         )
         
-        # 谱面标题 (30, 165)
+        # 谱面标题 (80, 165)
         title = beatmap_info.get('title', '???')
         draw_text_with_outline(
             draw,
-            (30, 165),
+            (80, 165),
             title,
             self.assets.get_font('torus_sb_30'),
             fill=(255, 255, 255, 255),
             anchor="lm"
         )
         
-        # 艺术家 (30, 200)
+        # 艺术家 (80, 200)
         # 如果有artist字段用artist，否则用beatmapset.artist，都没有就用creator
         artist = beatmap_info.get('artist')
         if not artist:
@@ -688,38 +637,38 @@ class ScoreImageGenerator:
         
         draw_text_with_outline(
             draw,
-            (30, 200),
+            (80, 200),
             artist,
             self.assets.get_font('torus_sb_20'),
             fill=(255, 255, 255, 255),
             anchor="lm"
         )
         
-        # 谱师 (30, 235)
+        # 谱师 (80, 235)
         creator = beatmap_info.get('creator', '???')
         mapper_text = f"谱师: {creator}"
         draw_text_with_outline(
             draw,
-            (30, 235),
+            (80, 235),
             mapper_text,
             self.assets.get_font('torus_sb_15'),
             fill=(255, 255, 255, 255),
             anchor="lm"
         )
         
-        # 星级 (600, 70) - 与难度版本同一水平线
+        # 星级 (570, 70) - 考虑到左侧曲名的缩进并且更贴近参考图排版
         star_text = f"★{difficulty:.2f}"
         star_font = self.assets.get_font('torus_sb_20')
         s_width = star_font.getlength(star_text)
         
-        # 星级背景方块 (统一黑色较小不透明度)
-        star_bg = Image.new("RGBA", (int(s_width + 30), 30), (0, 0, 0, 70))
-        star_bg = draw_fillet(star_bg, 15)
-        im.alpha_composite(star_bg, (int(600 - s_width/2 - 15), 55))  # 根据锚点适当调整
+        # 星级背景方块
+        star_bg = Image.new("RGBA", (int(s_width + 40), 30), (0, 0, 0, 0))
+        ImageDraw.Draw(star_bg).rounded_rectangle((0, 0, int(s_width + 40), 30), radius=15, fill=(0, 0, 0, 255))
+        im.alpha_composite(star_bg, (int(570 - s_width/2 - 20), 55))  # 根据锚点适当调整
         
         draw_text_with_outline(
             draw,
-            (600, 70),
+            (570, 70),
             star_text,
             star_font,
             fill=diff_color,
