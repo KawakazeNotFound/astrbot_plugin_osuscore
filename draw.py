@@ -32,6 +32,35 @@ WORK_DIR = ASSETS_DIR / "work"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def draw_fillet(img: Image.Image, radii: int) -> Image.Image:
+    """绘制圆角矩形（nonebot实现）
+    
+    Args:
+        img: 原始图片
+        radii: 圆角半径
+        
+    Returns:
+        带圆角的图片
+    """
+    # 画圆（用于分离4个角）
+    circle = Image.new("L", (radii * 2, radii * 2), 0)  # 黑色背景画布
+    draw = ImageDraw.Draw(circle)
+    draw.ellipse((0, 0, radii * 2, radii * 2), fill=255)  # 白色圆形
+    
+    # 原图
+    img = img.convert("RGBA")
+    w, h = img.size
+    
+    # 画4个角（将整圆分离为4个部分）
+    alpha = Image.new("L", img.size, 255)
+    alpha.paste(circle.crop((0, 0, radii, radii)), (0, 0))  # 左上角
+    alpha.paste(circle.crop((radii, 0, radii * 2, radii)), (w - radii, 0))  # 右上角
+    alpha.paste(circle.crop((radii, radii, radii * 2, radii * 2)), (w - radii, h - radii))  # 右下角
+    alpha.paste(circle.crop((0, radii, radii, radii * 2)), (0, h - radii))  # 左下角
+    img.putalpha(alpha)
+    return img
+
+
 class StarColorMapper:
     """星级难度颜色映射器"""
     
@@ -268,6 +297,48 @@ async def crop_bg(size: tuple[int, int], img: Image.Image) -> Image.Image:
         return img.resize((fix_w, fix_h), Image.Resampling.LANCZOS)
 
 
+async def download_user_avatar(avatar_url: str, user_id: int) -> Optional[Image.Image]:
+    """下载用户头像
+    
+    Args:
+        avatar_url: 头像URL
+        user_id: 用户ID
+        
+    Returns:
+        头像图片对象，失败返回None
+    """
+    if not avatar_url:
+        return None
+    
+    # 检查缓存
+    cache_path = CACHE_DIR / f"avatar_{user_id}.png"
+    if cache_path.exists():
+        try:
+            return Image.open(cache_path).convert("RGBA")
+        except Exception:
+            pass
+    
+    # 下载头像
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            resp = await client.get(avatar_url)
+            resp.raise_for_status()
+            
+            img = Image.open(BytesIO(resp.content)).convert("RGBA")
+            
+            # 保存到缓存
+            try:
+                img.save(cache_path, "PNG")
+            except Exception:
+                pass
+            
+            return img
+    except Exception as e:
+        print(f"Failed to download avatar: {e}")
+        return None
+
+
+
 def draw_text_with_outline(
     draw: ImageDraw.ImageDraw,
     position: tuple[int, int],
@@ -374,6 +445,22 @@ class ScoreImageGenerator:
         
         # 第5层：排名图标
         await self._draw_rank_icon(im, score_info)
+        
+        # 第6层：用户头像 (27, 532) 大小170x170，圆角15
+        avatar_url = user_info.get('avatar_url')
+        user_id = user_info.get('id')
+        if avatar_url and user_id:
+            try:
+                avatar_img = await download_user_avatar(avatar_url, user_id)
+                if avatar_img:
+                    # 调整大小为170x170
+                    avatar_img = avatar_img.resize((170, 170), Image.Resampling.LANCZOS)
+                    # 添加圆角
+                    avatar_img = draw_fillet(avatar_img, 15)
+                    # 合成到主图
+                    im.alpha_composite(avatar_img, (27, 532))
+            except Exception as e:
+                print(f"Failed to composite avatar: {e}")
         
         # 转换为BytesIO
         img_bytes = BytesIO()
@@ -524,6 +611,35 @@ class ScoreImageGenerator:
             anchor="lm",
             fill=(255, 255, 255, 255)
         )
+        
+        # 全球排名 - 标签在(883, 260)，数值在(985, 260)
+        global_rank = user_info.get('global_rank')
+        if global_rank and global_rank > 0:
+            draw.text(
+                (883, 260),
+                "全球排行：",
+                font=self.assets.get_font('torus_sb_20'),
+                anchor="lm",
+                fill=(255, 255, 255, 255)
+            )
+            draw.text(
+                (985, 260),
+                f"#{global_rank:,}",  # 使用逗号分隔千位
+                font=self.assets.get_font('torus_sb_25'),
+                anchor="lm",
+                fill=(255, 255, 255, 255)
+            )
+        
+        # 地区排名 (283, 630)
+        country_rank = user_info.get('country_rank')
+        if country_rank and country_rank > 0:
+            draw.text(
+                (283, 630),
+                f"#{country_rank:,}",  # 使用逗号分隔千位
+                font=self.assets.get_font('torus_sb_25'),
+                anchor="lm",
+                fill=(255, 255, 255, 255)
+            )
         
         # PP值 (768, 438) - 所有模式统一位置
         pp_value = score_info.get("pp", 0)

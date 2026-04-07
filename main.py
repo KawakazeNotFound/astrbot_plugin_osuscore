@@ -15,6 +15,7 @@ from .api import OsuApiClient
 from .database import Database
 from .draw import ScoreImageGenerator
 from .utils import parse_command_args, get_mode_name
+from .data_adapter import adapt_api_data_for_image
 
 
 @register("osuscore", "claude", "OSU查分插件", "0.1.0", "https://github.com/user/astrbot_plugin_osuscore")
@@ -140,51 +141,28 @@ class OsuScorePlugin(Star):
             score = scores[0]
             logger.info(f"First score keys: {score.keys() if isinstance(score, dict) else 'not a dict'}")
 
-            # 获取谱面信息
-            beatmap_id = score.get("beatmap_id", 0)
-            if not beatmap_id:
-                # 如果没有直接的 beatmap_id，尝试从 beatmap 对象中获取
-                beatmap_obj = score.get("beatmap", {})
-                beatmap_id = beatmap_obj.get("id", 0)
-
-            if beatmap_id:
-                beatmap_info = await self.api_client.get_beatmap(beatmap_id)
-            else:
-                raise Exception("无法获取谱面 ID")
-
-            # 获取用户完整信息（用于显示）
-            try:
-                user_info = await self.api_client.get_user(str(osu_id))
-            except:
-                # 如果无法获取用户信息，使用基本信息
-                user_info = {"username": "Unknown"}
-
-            # 生成图片数据
-            score_data = {
-                "score": score.get("total_score", score.get("score", 0)),  # 尝试 total_score，回退到 score
-                "accuracy": score.get("accuracy", 0),
-                "max_combo": score.get("max_combo", 0),
-                "rank": score.get("rank", "F"),
-                "mods": score.get("mods", []),
-                "pp": score.get("pp", 0),
-                "created_at": score.get("ended_at", score.get("created_at", "")),
-                "mode": mode,
-            }
-
-            beatmap_data = {
-                "title": beatmap_info.get("beatmapset", {}).get("title", "Unknown"),
-                "version": beatmap_info.get("version", "Unknown"),
-                "creator": beatmap_info.get("beatmapset", {}).get("creator", "Unknown"),
-                "difficulty_rating": beatmap_info.get("difficulty_rating", 0),
-            }
-
-            user_simple = {
-                "username": user_info.get("username", "Unknown"),
-            }
+            # 使用数据适配器转换API数据
+            user_info, score_data, beatmap_data = adapt_api_data_for_image(score)
+            
+            # 如果score响应中没有用户统计信息，额外获取
+            if not user_info.get('global_rank') or not user_info.get('country_rank'):
+                try:
+                    full_user_info = await self.api_client.get_user(str(osu_id))
+                    if full_user_info:
+                        stats = full_user_info.get('statistics', {})
+                        user_info['global_rank'] = stats.get('global_rank', 0)
+                        user_info['country_rank'] = stats.get('country_rank', 0)
+                        user_info['pp'] = stats.get('pp', 0)
+                except Exception as e:
+                    logger.warning(f"Failed to get user statistics: {e}")
+            
+            logger.info(f"Adapted user_info: {user_info}")
+            logger.info(f"Adapted score_data: {score_data}")
+            logger.info(f"Adapted beatmap_data: {beatmap_data}")
 
             # 生成图片
             img_bytes = await self.img_generator.generate_score_image(
-                user_simple,
+                user_info,
                 score_data,
                 beatmap_data
             )
