@@ -1,7 +1,7 @@
 """工具函数"""
 
 import re
-from typing import Dict, Optional, List
+from typing import Any, Dict, Optional, List
 
 # 模式映射
 MODE_MAP = {
@@ -12,6 +12,51 @@ MODE_MAP = {
 }
 
 MODE_REVERSE = {v: k for k, v in MODE_MAP.items()}
+
+# 兼容 nonebot-plugin-osubot 的模式映射
+GM = {
+    0: "osu",
+    1: "taiko",
+    2: "fruits",
+    3: "mania",
+    4: "osu",
+    5: "taiko",
+    6: "fruits",
+    8: "osu",
+}
+
+NGM = {
+    "0": "osu",
+    "1": "taiko",
+    "2": "fruits",
+    "3": "mania",
+    "4": "rxosu",
+    "5": "rxtaiko",
+    "6": "rxfruits",
+    "8": "aposu",
+}
+
+GMN = {
+    "osu": "Std",
+    "taiko": "Taiko",
+    "fruits": "Ctb",
+    "mania": "Mania",
+    "rxosu": "RX Std",
+    "rxtaiko": "RX Taiko",
+    "rxfruits": "RX Ctb",
+    "aposu": "AP Std",
+}
+
+FGM = {
+    "osu": 0,
+    "taiko": 1,
+    "fruits": 2,
+    "mania": 3,
+    "rxosu": 4,
+    "rxtaiko": 5,
+    "rxfruits": 6,
+    "aposu": 8,
+}
 
 # Mod 字典
 MODS_DICT = {
@@ -58,7 +103,7 @@ def parse_mods(mod_string: str) -> List[str]:
     return mods
 
 
-def parse_command_args(text: str) -> Dict[str, any]:
+def parse_command_args(text: str) -> Dict[str, Any]:
     """
     解析命令参数
     支持格式: /pr [username] [:mode] [+mods]
@@ -135,3 +180,27 @@ def get_mods_string(mods: list) -> str:
     if not mods:
         return "No Mod"
     return "".join([mod["acronym"] if isinstance(mod, dict) else mod for mod in mods])
+
+
+def info_calc(n1: Optional[float], n2: Optional[float], rank: bool = False, pp: bool = False):
+    """按参考实现计算资料卡变化值与箭头。"""
+    if not n1 or not n2:
+        return "", 0
+    num = n1 - n2
+    if num < 0:
+        if rank:
+            op, value = "↑", num * -1
+        elif pp:
+            op, value = "↓", num * -1
+        else:
+            op, value = "-", num * -1
+    elif num > 0:
+        if rank:
+            op, value = "↓", num
+        elif pp:
+            op, value = "↑", num
+        else:
+            op, value = "+", num
+    else:
+        op, value = "", 0
+    return [op, value]

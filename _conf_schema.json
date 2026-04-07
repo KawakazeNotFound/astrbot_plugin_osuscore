@@ -11,5 +11,12 @@
         "type": "string",
         "description": "SQLite 数据库路径",
         "default": "./osuscore.db"
+    },
+    "info_bg": {
+        "type": "list",
+        "description": "info 资料卡随机背景地址列表",
+        "default": [
+            "https://api.nerinyan.moe/profile-background"
+        ]
     }
 }

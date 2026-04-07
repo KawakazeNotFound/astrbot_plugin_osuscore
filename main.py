@@ -1,20 +1,19 @@
 """OSU Score 查分插件主文件"""
 
-from astrbot.api.event import filter, AstrMessageEvent, MessageChain
+import os
+import re
+import time
+
+from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger, AstrBotConfig
-import astrbot.api.message_components as Comp
-
-import asyncio
-import tempfile
-import os
-import time
-from io import BytesIO
 
 from .api import OsuApiClient
 from .database import Database
 from .draw import ScoreImageGenerator
-from .utils import parse_command_args, get_mode_name
+from .exceptions import NetworkError
+from .info_renderer import draw_info
+from .utils import parse_command_args, NGM
 from .data_adapter import adapt_api_data_for_image
 from .pp_calculator import calculate_all_pp_info
 
@@ -32,6 +31,7 @@ class OsuScorePlugin(Star):
         self.client_id = config.get("osu_client_id")
         self.client_secret = config.get("osu_client_secret")
         self.db_path = config.get("db_path", "./osuscore.db")
+        self.info_bg = config.get("info_bg", ["https://api.nerinyan.moe/profile-background"])
 
         # 初始化组件
         self.db = Database(self.db_path)
@@ -60,6 +60,7 @@ class OsuScorePlugin(Star):
         if not self._is_api_client_ready():
             yield event.plain_result("❌ OSU API 未配置，请检查插件配置")
             return
+        assert self.api_client is not None
 
         user_id = event.get_sender_id()
         # 获取参数（去掉命令名）
@@ -87,6 +88,41 @@ class OsuScorePlugin(Star):
             logger.error(f"绑定账号失败: {e}")
             yield event.plain_result(f"❌ 绑定失败: {str(e)}")
 
+    @filter.command("sbbind")
+    async def bind_sb_account(self, event: AstrMessageEvent):
+        """
+        绑定 SB 服务器账号
+        使用: /sbbind <用户名>
+        """
+        if not self._is_api_client_ready():
+            yield event.plain_result("❌ OSU API 未配置，请检查插件配置")
+            return
+        assert self.api_client is not None
+
+        user_id = event.get_sender_id()
+        args = event.message_str.strip()
+        if args.lower().startswith("sbbind"):
+            args = args[6:].strip()
+
+        if not args:
+            yield event.plain_result("❌ 请输入 SB 服务器用户名\n使用: /sbbind <用户名>")
+            return
+
+        try:
+            old_sb_user = await self.db.get_sb_user(user_id)
+            if old_sb_user:
+                yield event.plain_result(f"您已绑定{old_sb_user['osu_name']}，如需要解绑请输入 /sbunbind")
+                return
+
+            sb_uid = await self.api_client.get_uid_by_name(args, "ppysb")
+            await self.db.save_sb_user(user_id, sb_uid, args)
+            yield event.plain_result(f"✅ 成功绑定 ppysb 服务器用户：{args}")
+        except NetworkError:
+            yield event.plain_result(f"❌ 绑定失败，找不到叫 {args} 的人哦")
+        except Exception as e:
+            logger.error(f"绑定 SB 账号失败: {e}")
+            yield event.plain_result(f"❌ 绑定失败: {str(e)}")
+
     @filter.command("pr")
     async def recent_score(self, event: AstrMessageEvent):
         """
@@ -97,6 +133,7 @@ class OsuScorePlugin(Star):
         if not self._is_api_client_ready():
             yield event.plain_result("❌ OSU API 未配置，请检查插件配置")
             return
+        assert self.api_client is not None
 
         user_id = event.get_sender_id()
         # 获取参数（去掉命令名）
@@ -200,13 +237,77 @@ class OsuScorePlugin(Star):
             logger.error(f"查询最近成绩失败: {e}")
             yield event.plain_result(f"❌ 查询失败: {str(e)}")
 
+    @filter.command("info")
+    async def user_info(self, event: AstrMessageEvent):
+        """
+        查询个人资料卡
+        使用: /info [用户名] [:模式] [#天数] [&服务器]
+        """
+        if not self._is_api_client_ready():
+            yield event.plain_result("❌ OSU API 未配置，请检查插件配置")
+            return
+        assert self.api_client is not None
+
+        user_id = event.get_sender_id()
+        message = event.message_str.strip()
+        if message.lower().startswith("info"):
+            message = message[4:].strip()
+
+        state = await self._parse_info_state(user_id, message)
+        if "error" in state:
+            yield event.plain_result(state["error"])
+            return
+
+        try:
+            data = await draw_info(
+                self.api_client,
+                self.db,
+                state["user"],
+                NGM[state["mode"]],
+                state["day"],
+                state["source"],
+                self.info_bg,
+            )
+
+            os.makedirs("./osuscore_temp", exist_ok=True)
+            tmp_path = f"./osuscore_temp/info_{int(time.time() * 1000)}.jpg"
+            with open(tmp_path, "wb") as f:
+                f.write(data)
+
+            yield event.image_result(tmp_path)
+        except NetworkError as e:
+            yield event.plain_result(
+                f"在查找用户：{state['username']} {NGM[state['mode']]}模式 {state['day']}日内 成绩时{str(e)}"
+            )
+        except Exception as e:
+            logger.error(f"查询用户资料失败: {e}")
+            yield event.plain_result(f"❌ 查询失败: {str(e)}")
+
     @filter.command("unbind")
     async def unbind_account(self, event: AstrMessageEvent):
         """
         解绑 OSU 账号
         """
-        # 暂时不实现，等后续完善数据库删除功能
-        yield event.plain_result("此功能开发中...")
+        user_id = event.get_sender_id()
+        user_data = await self.db.get_user(user_id)
+        if not user_data:
+            yield event.plain_result("尚未绑定，无需解绑")
+            return
+        await self.db.delete_user(user_id)
+        yield event.plain_result("✅ 解绑成功！")
+
+    @filter.command("sbunbind")
+    async def unbind_sb_account(self, event: AstrMessageEvent):
+        """
+        解绑 SB 服务器账号
+        """
+        user_id = event.get_sender_id()
+        sb_user = await self.db.get_sb_user(user_id)
+        if not sb_user:
+            yield event.plain_result("尚未绑定，无需解绑")
+            return
+        await self.db.delete_sb_user(user_id)
+        yield event.plain_result("✅ 解绑成功！")
 
     def _mode_to_api_format(self, mode: str) -> str:
         """将模式转换为 API 格式"""
@@ -217,3 +318,65 @@ class OsuScorePlugin(Star):
             "3": "mania"
         }
         return mode_map.get(mode, "osu")
+
+    async def _parse_info_state(self, platform_user_id: str, raw_args: str) -> dict:
+        """按参考 split_msg 行为解析 /info 参数。"""
+        assert self.api_client is not None
+        user_data = await self.db.get_user(platform_user_id)
+
+        state = {
+            "user": user_data["osu_id"] if user_data else 0,
+            "mode": str(user_data["osu_mode"]) if user_data else "0",
+            "username": user_data["osu_name"] if user_data else "",
+            "day": 0,
+            "source": "osu",
+        }
+
+        arg = raw_args.strip().replace("＝", "=").replace("：", ":").replace("＆", "&").replace("＃", "#")
+        pattern = r"[:：]\s*(\w+)|[#＃]\s*(\d+)|[＆&]\s*(\w+)"
+
+        for match in re.findall(pattern, arg):
+            if match[0]:
+                state["mode"] = match[0]
+            if match[1]:
+                state["day"] = int(match[1])
+            if match[2]:
+                source = {"sb": "ppysb", "ppysb": "ppysb"}
+                state["source"] = source.get(match[2], "osu")
+
+        arg = re.sub(pattern, "", arg).strip()
+        if arg:
+            state["username"] = arg
+            try:
+                state["user"] = await self.api_client.get_uid_by_name(arg, state["source"])
+            except NetworkError:
+                state["error"] = f"在 {state['source']} 服务器没有找到用户: {arg}"
+                return state
+
+        if state["source"] == "ppysb":
+            if not state["mode"].isdigit() or not (0 <= int(state["mode"]) <= 6 or int(state["mode"]) == 8):
+                state["error"] = "模式应为0-8(没有7)！\n0: std\n1: taiko\n2: ctb\n3: mania\n4-6: SB服 RX 模式\n8: SB服 AP 模式"
+                return state
+        else:
+            if not state["mode"].isdigit() or not (0 <= int(state["mode"]) <= 3):
+                state["error"] = "模式应为0-3！\n0: std\n1: taiko\n2: ctb\n3: mania"
+                return state
+
+        if state["day"] < 0:
+            state["error"] = "查询的日期应是一个正数"
+            return state
+
+        if state["source"] == "ppysb" and not arg:
+            sb_user_data = await self.db.get_sb_user(platform_user_id)
+            if sb_user_data:
+                state["user"] = sb_user_data["osu_id"]
+                state["username"] = sb_user_data["osu_name"]
+                state.pop("error", None)
+            else:
+                state["error"] = "该账号尚未绑定 sb 服务器，请输入 /sbbind 用户名 绑定账号"
+                return state
+
+        if state["user"] == 0:
+            state["error"] = "该账号尚未绑定，请输入 /bind 用户名 绑定账号"
+
+        return state

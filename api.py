@@ -2,9 +2,12 @@
 
 import httpx
 import asyncio
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from datetime import datetime
+from typing import Optional, Dict, Any, Union
 from pydantic import BaseModel
+
+from .exceptions import NetworkError
+from .info_models import UnifiedUser, GradeCounts, Level, UserStatistics
 
 
 class TokenCache:
@@ -41,6 +44,22 @@ class OsuApiClient:
         self.token_cache = TokenCache()
         self.client = httpx.AsyncClient(timeout=30.0)
 
+    async def _request_json(self, url: str, headers: Optional[dict] = None, params: Optional[dict] = None) -> dict:
+        response = await self.client.get(url, headers=headers, params=params)
+        if response.status_code == 404:
+            raise NetworkError("未找到该玩家，请确认玩家ID")
+        if response.status_code != 200:
+            raise NetworkError(f"API 请求失败: HTTP {response.status_code}")
+        return response.json()
+
+    async def _request_public_json(self, url: str, not_found_message: str) -> dict:
+        response = await self.client.get(url)
+        if response.status_code == 404:
+            raise NetworkError(not_found_message)
+        if response.status_code != 200:
+            raise NetworkError(f"API 请求失败: HTTP {response.status_code}")
+        return response.json()
+
     async def _get_token(self) -> str:
         """获取或刷新 access token"""
         cached_token = await self.token_cache.get_token()
@@ -75,21 +94,14 @@ class OsuApiClient:
             "x-api-version": "20220705"
         }
 
-    async def get_user(self, user_identifier: str) -> Dict[str, Any]:
+    async def get_user(self, user_identifier: str, mode: str = "osu") -> Dict[str, Any]:
         """
         获取用户信息
         user_identifier: 用户 ID 或用户名
         """
         headers = await self._get_headers()
-        url = f"{self.api_base}/users/{user_identifier}/osu"
-
-        response = await self.client.get(url, headers=headers)
-        if response.status_code == 404:
-            raise Exception(f"User not found: {user_identifier}")
-        if response.status_code != 200:
-            raise Exception(f"API error: {response.status_code}")
-
-        return response.json()
+        url = f"{self.api_base}/users/{user_identifier}/{mode}"
+        return await self._request_json(url, headers=headers)
 
     async def get_user_scores(
         self,
@@ -132,6 +144,107 @@ class OsuApiClient:
             raise Exception(f"API error: {response.status_code}")
 
         return response.json()
+
+    async def get_uid_by_name(self, name: str, source: str = "osu") -> int:
+        if source == "osu":
+            headers = await self._get_headers()
+            data = await self._request_json(f"{self.api_base}/users/@{name}", headers=headers)
+            return data["id"]
+
+        if source == "ppysb":
+            data = await self._request_public_json(
+                f"https://api.ppy.sb/v1/get_player_info?scope=all&name={name}",
+                "未找到该玩家，请确认玩家ID是否正确",
+            )
+            return int(data["player"]["info"]["id"])
+
+        raise NetworkError(f"不支持的服务器: {source}")
+
+    async def get_user_info_data(self, uid: Union[int, str], mode: str, source: str = "osu") -> UnifiedUser:
+        if source == "osu":
+            if mode not in {"osu", "taiko", "fruits", "mania"}:
+                raise NetworkError("模式应为0-3！\n0: std\n1: taiko\n2: ctb\n3: mania")
+
+            headers = await self._get_headers()
+            data = await self._request_json(f"{self.api_base}/users/{uid}/{mode}", headers=headers)
+            return UnifiedUser(**data)
+
+        if source == "ppysb":
+            data = await self._request_public_json(
+                f"https://api.ppy.sb/v1/get_player_info?scope=all&id={uid}",
+                "未找到该玩家，请确认玩家ID",
+            )
+            player = data.get("player", {})
+            info_data = player.get("info", {})
+            stats = player.get("stats", {})
+
+            mode_map = {
+                "osu": "0",
+                "taiko": "1",
+                "fruits": "2",
+                "mania": "3",
+                "rxosu": "4",
+                "rxtaiko": "5",
+                "rxfruits": "6",
+                "aposu": "8",
+            }
+            mode_key = mode_map.get(mode)
+            if mode_key is None:
+                raise NetworkError("模式应为0-8(没有7)！\n0: std\n1: taiko\n2: ctb\n3: mania\n4-6: SB服 RX 模式\n8: SB服 AP 模式")
+
+            mode_stats = stats.get(mode_key, {})
+
+            def _to_int(v, default=0):
+                try:
+                    return int(v)
+                except (TypeError, ValueError):
+                    return default
+
+            def _to_float(v, default=0.0):
+                try:
+                    return float(v)
+                except (TypeError, ValueError):
+                    return default
+
+            user_statistics = UserStatistics(
+                grade_counts=GradeCounts(
+                    ssh=_to_int(mode_stats.get("xh_count")),
+                    ss=_to_int(mode_stats.get("x_count")),
+                    sh=_to_int(mode_stats.get("sh_count")),
+                    s=_to_int(mode_stats.get("s_count")),
+                    a=_to_int(mode_stats.get("a_count")),
+                ),
+                hit_accuracy=_to_float(mode_stats.get("acc")),
+                level=Level(current=100, progress=99),
+                maximum_combo=_to_int(mode_stats.get("max_combo")),
+                play_count=_to_int(mode_stats.get("plays")),
+                play_time=_to_int(mode_stats.get("playtime")),
+                pp=_to_float(mode_stats.get("pp")),
+                ranked_score=_to_int(mode_stats.get("rscore")),
+                replays_watched_by_others=0,
+                total_hits=_to_int(mode_stats.get("total_hits")),
+                total_score=_to_int(mode_stats.get("tscore")),
+                global_rank=_to_int(mode_stats.get("rank")) or None,
+                country_rank=_to_int(mode_stats.get("country_rank")) or None,
+            )
+
+            user_id = _to_int(info_data.get("id"))
+            return UnifiedUser(
+                avatar_url=f"https://a.ppy.sb/{user_id}",
+                country_code=str(info_data.get("country", "xx")).upper(),
+                id=user_id,
+                username=str(info_data.get("name", uid)),
+                is_supporter=False,
+                statistics=user_statistics,
+            )
+
+        raise NetworkError(f"不支持的服务器: {source}")
+
+    async def get_image_bytes(self, url: str) -> bytes:
+        response = await self.client.get(url)
+        if response.status_code != 200:
+            raise NetworkError(f"背景下载失败: HTTP {response.status_code}")
+        return response.content
 
     async def close(self):
         """关闭客户端连接"""
