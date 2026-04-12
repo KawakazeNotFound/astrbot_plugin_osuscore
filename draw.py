@@ -1,90 +1,23 @@
-"""图片生成模块 - 基于nonebot-plugin-osubot的实现"""
-
 import os
 import asyncio
-import re
 from io import BytesIO
 from pathlib import Path
-from typing import Dict, Any, Optional, Union
-from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+from typing import Dict, Any
+from jinja2 import Environment, FileSystemLoader
+from playwright.async_api import async_playwright
 import numpy as np
 import matplotlib as mpl
 import matplotlib.colors as mcolors
-import httpx
-
-try:
-    from .utils import format_score_rank, format_accuracy, format_number, get_mode_name, get_mods_string
-except ImportError:
-    import sys
-    sys.path.insert(0, os.path.dirname(__file__))
-    from utils import format_score_rank, format_accuracy, format_number, get_mode_name, get_mods_string
-
-
-# 资源路径
-ASSETS_DIR = Path(__file__).parent / "assets"
-CACHE_DIR = ASSETS_DIR / "cache"
-FONTS_DIR = ASSETS_DIR / "fonts"
-MODS_DIR = ASSETS_DIR / "mods"
-RANKING_DIR = ASSETS_DIR / "ranking"
-WORK_DIR = ASSETS_DIR / "work"
-
-# 确保缓存目录存在
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def draw_fillet(img: Image.Image, radii: int) -> Image.Image:
-    """绘制圆角矩形（nonebot实现）
-    
-    Args:
-        img: 原始图片
-        radii: 圆角半径
-        
-    Returns:
-        带圆角的图片
-    """
-    # 画圆（用于分离4个角）
-    circle = Image.new("L", (radii * 2, radii * 2), 0)  # 黑色背景画布
-    draw = ImageDraw.Draw(circle)
-    draw.ellipse((0, 0, radii * 2, radii * 2), fill=255)  # 白色圆形
-    
-    # 原图
-    img = img.convert("RGBA")
-    w, h = img.size
-    
-    # 画4个角（将整圆分离为4个部分）
-    alpha = Image.new("L", img.size, 255)
-    alpha.paste(circle.crop((0, 0, radii, radii)), (0, 0))  # 左上角
-    alpha.paste(circle.crop((radii, 0, radii * 2, radii)), (w - radii, 0))  # 右上角
-    alpha.paste(circle.crop((radii, radii, radii * 2, radii * 2)), (w - radii, h - radii))  # 右下角
-    alpha.paste(circle.crop((0, radii, radii, radii * 2)), (0, h - radii))  # 左下角
-    img.putalpha(alpha)
-    return img
-
 
 class StarColorMapper:
     """星级难度颜色映射器"""
-    
     def __init__(self):
-        # 参考: https://github.com/ppy/osu-web/blob/master/resources/js/utils/beatmap-helper.ts
         input_values = np.array([0.1, 1.25, 2, 2.5, 3.3, 4.2, 4.9, 5.8, 6.7, 7.7, 9])
         normalized_values = (input_values - np.min(input_values)) / (np.max(input_values) - np.min(input_values))
-        
-        # 颜色定义（从低到高难度）
         colors = [
-            "#4290FB",    # 0.1★ - 蓝色
-            "#4FC0FF",    # 1.25★ - 青色
-            "#4FFFD5",    # 2★ - 浅青
-            "#7CFF4F",    # 2.5★ - 绿色
-            "#F6F05C",    # 3.3★ - 黄色
-            "#FF8068",    # 4.2★ - 橙色
-            "#FF4E6F",    # 4.9★ - 红粉
-            "#C645B8",    # 5.8★ - 紫色
-            "#6563DE",    # 6.7★ - 靛蓝
-            "#18158E",    # 7.7★ - 深靛蓝
-            "#000000",    # 9★ - 黑色
+            "#4290FB", "#4FC0FF", "#4FFFD5", "#7CFF4F", "#F6F05C", 
+            "#FF8068", "#FF4E6F", "#C645B8", "#6563DE", "#18158E", "#000000"
         ]
-        
-        # 创建颜色映射
         self.cmap = mcolors.LinearSegmentedColormap.from_list(
             "difficultyColourSpectrum", list(zip(normalized_values, colors)), N=16384
         )
@@ -93,359 +26,22 @@ class StarColorMapper:
             np.linspace(0, 9, 900), bytes=True
         )
     
-    def get_color(self, stars: float) -> tuple:
-        """获取星级对应的RGB颜色"""
+    def get_color_hex(self, stars: float) -> str:
         if stars < 0.1:
-            return (170, 170, 170)  # 灰色
+            return "#AAAAAA"
         elif stars >= 9:
-            return (0, 0, 0)  # 黑色
+            return "#000000"
         else:
             r, g, b, _a = self.color_arr[int(stars * 100)]
-            return (r, g, b)
-
-
-class AssetsLoader:
-    """资源加载器"""
-    
-    def __init__(self):
-        self.fonts = {}
-        self.mod_icons = {}
-        self.rank_icons = {}
-        self.mode_backgrounds = {}
-        self.flags = {}
-        self.supporter_icon = None
-        self.star_mapper = StarColorMapper()
-        self._load_assets()
-    
-    def _load_assets(self):
-        """加载所有资源"""
-        try:
-            # 加载字体
-            self._load_fonts()
-            # 加载Mod图标
-            self._load_mod_icons()
-            # 加载排名图标
-            self._load_rank_icons()
-            # 加载游戏模式背景
-            self._load_mode_backgrounds()
-            # 加载旗帜
-            self._load_flags()
-            # 加载 Supporter 标识
-            supporter_file = WORK_DIR / "supporter.png"
-            if supporter_file.exists():
-                self.supporter_icon = Image.open(supporter_file).convert("RGBA").resize((30, 30), Image.Resampling.LANCZOS)
-        except Exception as e:
-            print(f"Warning: Failed to load some assets: {e}")
-            
-    def _load_flags(self):
-        """加载国旗图标"""
-        flags_dir = ASSETS_DIR / "flags"
-        if flags_dir.exists():
-            for flag_file in flags_dir.glob("*.png"):
-                try:
-                    self.flags[flag_file.stem.upper()] = Image.open(flag_file).convert("RGBA").resize((66, 45), Image.Resampling.LANCZOS)
-                except Exception as e:
-                    print(f"Warning: Failed to load flag {flag_file.name}: {e}")
-    
-    def _load_fonts(self):
-        """加载字体文件"""
-        try:
-            # Torus Regular
-            torus_regular = FONTS_DIR / "Torus Regular.otf"
-            if torus_regular.exists():
-                self.fonts['torus_r_15'] = ImageFont.truetype(str(torus_regular), 15)
-                self.fonts['torus_r_20'] = ImageFont.truetype(str(torus_regular), 20)
-                self.fonts['torus_r_25'] = ImageFont.truetype(str(torus_regular), 25)
-                self.fonts['torus_r_30'] = ImageFont.truetype(str(torus_regular), 30)
-                self.fonts['torus_r_40'] = ImageFont.truetype(str(torus_regular), 40)
-                self.fonts['torus_r_50'] = ImageFont.truetype(str(torus_regular), 50)
-                self.fonts['torus_r_60'] = ImageFont.truetype(str(torus_regular), 60)
-            
-            # Torus SemiBold
-            torus_semibold = FONTS_DIR / "Torus SemiBold.otf"
-            if torus_semibold.exists():
-                self.fonts['torus_sb_15'] = ImageFont.truetype(str(torus_semibold), 15)
-                self.fonts['torus_sb_20'] = ImageFont.truetype(str(torus_semibold), 20)
-                self.fonts['torus_sb_25'] = ImageFont.truetype(str(torus_semibold), 25)
-                self.fonts['torus_sb_30'] = ImageFont.truetype(str(torus_semibold), 30)
-                self.fonts['torus_sb_40'] = ImageFont.truetype(str(torus_semibold), 40)
-            
-            # Venera
-            venera = FONTS_DIR / "Venera.otf"
-            if venera.exists():
-                self.fonts['venera_60'] = ImageFont.truetype(str(venera), 60)
-                self.fonts['venera_40'] = ImageFont.truetype(str(venera), 40)
-            
-            # 如果没有加载到任何字体，使用默认字体
-            if not self.fonts:
-                default_font = ImageFont.load_default()
-                self.fonts['default'] = default_font
-        except Exception as e:
-            print(f"Warning: Failed to load fonts: {e}")
-            self.fonts['default'] = ImageFont.load_default()
-    
-    def _load_mod_icons(self):
-        """加载Mod图标"""
-        if MODS_DIR.exists():
-            for mod_file in MODS_DIR.glob("*.png"):
-                try:
-                    self.mod_icons[mod_file.stem] = Image.open(mod_file).convert("RGBA")
-                except Exception as e:
-                    print(f"Warning: Failed to load mod icon {mod_file.name}: {e}")
-    
-    def _load_rank_icons(self):
-        """加载排名图标"""
-        if RANKING_DIR.exists():
-            for rank_file in RANKING_DIR.glob("*.png"):
-                try:
-                    self.rank_icons[rank_file.stem.replace("ranking-", "")] = Image.open(rank_file).convert("RGBA")
-                except Exception as e:
-                    print(f"Warning: Failed to load rank icon {rank_file.name}: {e}")
-    
-    def _load_mode_backgrounds(self):
-        """加载游戏模式背景"""
-        mode_files = {
-            "0": "pfm_std.png",      # Standard
-            "1": "pfm_taiko.png",    # Taiko
-            "2": "pfm_ctb.png",      # Catch
-            "3": "pfm_mania.png",    # Mania
-        }
-        
-        for mode, filename in mode_files.items():
-            filepath = ASSETS_DIR / filename
-            if filepath.exists():
-                try:
-                    self.mode_backgrounds[mode] = Image.open(filepath).convert("RGBA")
-                except Exception as e:
-                    print(f"Warning: Failed to load mode background {filename}: {e}")
-    
-    def get_font(self, name: str, default_size: int = 20):
-        """获取字体，如果不存在返回默认字体"""
-        if name in self.fonts:
-            return self.fonts[name]
-        elif 'torus_r_20' in self.fonts:
-            return self.fonts['torus_r_20']
-        elif 'default' in self.fonts:
-            return self.fonts['default']
-        else:
-            try:
-                return ImageFont.truetype("arial.ttf", default_size)
-            except:
-                return ImageFont.load_default()
-
-
-# 全局资源加载器
-ASSETS = AssetsLoader()
-
-
-async def download_beatmap_cover(beatmapset_id: int) -> Optional[Image.Image]:
-    """
-    下载谱面封面图
-    尝试多个CDN源，支持缓存
-    """
-    cache_path = CACHE_DIR / f"cover_{beatmapset_id}.jpg"
-    
-    # 检查缓存
-    if cache_path.exists():
-        try:
-            return Image.open(cache_path).convert("RGBA")
-        except Exception:
-            cache_path.unlink()
-    
-    # 多个CDN源
-    urls = [
-        f"https://assets.ppy.sh/beatmaps/{beatmapset_id}/covers/cover.jpg",
-        f"https://b.ppy.sh/thumb/{beatmapset_id}l.jpg",
-        f"https://api.nerinyan.moe/bg/{beatmapset_id}",
-    ]
-    
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        for url in urls:
-            try:
-                response = await client.get(url)
-                if response.status_code == 200:
-                    img = Image.open(BytesIO(response.content)).convert("RGBA")
-                    # 保存到缓存
-                    try:
-                        img.save(cache_path, "JPEG")
-                    except:
-                        pass
-                    return img
-            except Exception:
-                continue
-    
-    return None
-
-
-async def crop_bg(size: tuple[int, int], img: Image.Image) -> Image.Image:
-    """
-    智能裁剪背景图以适配目标尺寸
-    保持宽高比，居中裁剪
-    """
-    bg_w, bg_h = img.size
-    fix_w, fix_h = size
-    
-    # 目标宽高比
-    fix_scale = fix_h / fix_w
-    # 图片宽高比
-    bg_scale = bg_h / bg_w
-    
-    # 图片较高时，缩放至宽度匹配，然后裁剪上下
-    if bg_scale > fix_scale:
-        scale_width = fix_w / bg_w
-        width = int(scale_width * bg_w)
-        height = int(scale_width * bg_h)
-        sf = img.resize((width, height), Image.Resampling.LANCZOS)
-        # 居中裁剪
-        crop_height = (height - fix_h) // 2
-        crop_img = sf.crop((0, crop_height, width, height - crop_height))
-        return crop_img
-    # 图片较宽时，缩放至高度匹配，然后裁剪左右
-    elif bg_scale < fix_scale:
-        scale_height = fix_h / bg_h
-        width = int(scale_height * bg_w)
-        height = int(scale_height * bg_h)
-        sf = img.resize((width, height), Image.Resampling.LANCZOS)
-        # 居中裁剪
-        crop_width = (width - fix_w) // 2
-        crop_img = sf.crop((crop_width, 0, width - crop_width, height))
-        return crop_img
-    else:
-        # 宽高比完全匹配
-        return img.resize((fix_w, fix_h), Image.Resampling.LANCZOS)
-
-
-async def download_user_avatar(avatar_url: str, user_id: int) -> Optional[Image.Image]:
-    """下载用户头像
-    
-    Args:
-        avatar_url: 头像URL
-        user_id: 用户ID
-        
-    Returns:
-        头像图片对象，失败返回None
-    """
-    if not avatar_url:
-        return None
-    
-    # 检查缓存
-    cache_path = CACHE_DIR / f"avatar_{user_id}.png"
-    if cache_path.exists():
-        try:
-            return Image.open(cache_path).convert("RGBA")
-        except Exception:
-            pass
-    
-    # 下载头像
-    try:
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-            resp = await client.get(avatar_url)
-            resp.raise_for_status()
-            
-            img = Image.open(BytesIO(resp.content)).convert("RGBA")
-            
-            # 保存到缓存
-            try:
-                img.save(cache_path, "PNG")
-            except Exception:
-                pass
-            
-            return img
-    except Exception as e:
-        print(f"Failed to download avatar: {e}")
-        return None
-
-
-
-async def download_user_cover(cover_url: str, user_id: int) -> Optional[Image.Image]:
-    """下载用户主页Banner (Cover)
-    
-    Args:
-        cover_url: Cover URL
-        user_id: 用户ID
-        
-    Returns:
-        图片对象，失败返回None
-    """
-    if not cover_url:
-        return None
-    
-    # 检查缓存
-    cache_path = CACHE_DIR / f"user_cover_{user_id}.png"
-    if cache_path.exists():
-        try:
-            return Image.open(cache_path).convert("RGBA")
-        except Exception:
-            pass
-    
-    # 下载Banner
-    try:
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-            resp = await client.get(cover_url)
-            resp.raise_for_status()
-            
-            img = Image.open(BytesIO(resp.content)).convert("RGBA")
-            
-            # 保存到缓存
-            try:
-                img.save(cache_path, "PNG")
-            except Exception:
-                pass
-            
-            return img
-    except Exception as e:
-        print(f"Failed to download user cover: {e}")
-        return None
-
-
-
-def draw_text_with_outline(
-    draw: ImageDraw.ImageDraw,
-    position: tuple[int, int],
-    text: str,
-    font: ImageFont.FreeTypeFont,
-    fill: tuple,
-    anchor: str = "lt",
-    outline_width: int = 2
-):
-    """
-    绘制带描边的文字
-    提高文字在复杂背景上的可读性
-    """
-    x, y = position
-    
-    # 绘制黑色描边（8个方向）
-    for dx in range(-outline_width, outline_width + 1):
-        for dy in range(-outline_width, outline_width + 1):
-            if dx != 0 or dy != 0:
-                draw.text(
-                    (x + dx, y + dy),
-                    text,
-                    font=font,
-                    anchor=anchor,
-                    fill=(0, 0, 0, 255)
-                )
-    
-    # 绘制主文字
-    draw.text(position, text, font=font, anchor=anchor, fill=fill)
-
+            return f"#{r:02x}{g:02x}{b:02x}"
 
 class ScoreImageGenerator:
-    """成绩截图生成器 - 完整nonebot风格实现"""
+    """成绩截图生成器 - 基于 Playwright + HTML"""
 
     def __init__(self):
-        # 图片尺寸
-        self.width = 1280
-        self.height = 720
-        self.padding = 30
-        
-        # 颜色定义
-        self.text_color = (255, 255, 255, 255)
-        self.text_secondary = (200, 200, 200, 255)
-        self.accent_color = (255, 204, 34, 255)  # 金色
-        
-        # 加载资源
-        self.assets = ASSETS
+        self.template_dir = Path(__file__).parent / "score_templates"
+        self.env = Environment(loader=FileSystemLoader(self.template_dir))
+        self.star_mapper = StarColorMapper()
         
     async def generate_score_image(
         self,
@@ -453,599 +49,96 @@ class ScoreImageGenerator:
         score_info: Dict[str, Any],
         beatmap_info: Dict[str, Any]
     ) -> BytesIO:
-        """
-        生成成绩截图
-        完整的多层合成实现
-        """
+        """生成成绩截图"""
+        stats = score_info.get("statistics", {})
+        stars = beatmap_info.get("difficulty_rating", 0.0)
+        
+        calc_total_combo = (
+            beatmap_info.get("count_circles", 0) +
+            beatmap_info.get("count_sliders", 0) +
+            beatmap_info.get("count_spinners", 0)
+        )
+        
+        total_len = beatmap_info.get("total_length", 0)
+        time_str = f"{total_len // 60}:{total_len % 60:02d}"
+
+        acc = score_info.get("accuracy", 0)
+        acc_val = acc * 100 if acc <= 1.0 else acc
+        
+        # 兼容老版数据的 if_fc_pp 或者 pp_if_fc
+        pp_if_fc = score_info.get('if_fc_pp', score_info.get('pp_if_fc', 0))
+        
+        context = {
+            "bg_url": f"https://assets.ppy.sh/beatmaps/{beatmap_info.get('beatmapset_id')}/covers/cover.jpg",
+            "set_id": str(beatmap_info.get("beatmapset_id", "")),
+            "map_id": str(beatmap_info.get("id", "")),
+            "version": beatmap_info.get("version", "Normal"),
+            "stars": f"{stars:.2f}",
+            "star_color": self.star_mapper.get_color_hex(stars),
+            "title": beatmap_info.get("title", ""),
+            "artist": beatmap_info.get("artist", ""),
+            "mapper": beatmap_info.get("creator", ""),
+            "time": time_str,
+            "circles": str(beatmap_info.get("count_circles", 0)),
+            "sliders": str(beatmap_info.get("count_sliders", 0)),
+            "spinners": str(beatmap_info.get("count_spinners", 0)),
+            "cs": f"{beatmap_info.get('cs', 0):.1f}",
+            "cs_percent": min(100, beatmap_info.get("cs", 0) * 10),
+            "hp": f"{beatmap_info.get('hp', 0):.1f}",
+            "hp_percent": min(100, beatmap_info.get("hp", 0) * 10),
+            "od": f"{beatmap_info.get('od', 0):.1f}",
+            "od_percent": min(100, beatmap_info.get("od", 0) * 10),
+            "ar": f"{beatmap_info.get('ar', 0):.1f}",
+            "ar_percent": min(100, beatmap_info.get("ar", 0) * 10),
+            "sr_percent": min(100, (stars / 10.0) * 100),
+            "avatar_url": user_info.get("avatar_url", ""),
+            "user_name": user_info.get("username", ""),
+            "is_supporter": user_info.get("is_supporter", False),
+            "flag_url": f"https://osu.ppy.sh/images/flags/{user_info.get('country_code', 'XX')}.png",
+            "country_rank": f"{user_info.get('country_rank', 0):,}",
+            "grade": score_info.get("rank", ""),
+            "score": f"{score_info.get('score', 0):,}",
+            "play_time": str(score_info.get("created_at", "")).replace("T", " ")[:19],
+            "global_rank": f"{user_info.get('global_rank', 0):,}",
+            "pp": f"{score_info.get('pp', 0):.0f}" if score_info.get('pp') else "-",
+            "pp_if_fc": f"{pp_if_fc:.0f}" if pp_if_fc else "-",
+            "pp_ss": f"{score_info.get('ss_pp', 0):.0f}" if score_info.get('ss_pp') else "-",
+            "pp_aim": f"{score_info.get('pp_aim', 0):.0f}" if score_info.get('pp_aim') else "-",
+            "pp_speed": f"{score_info.get('pp_speed', 0):.0f}" if score_info.get('pp_speed') else "-",
+            "pp_acc": f"{score_info.get('pp_acc', 0):.0f}" if score_info.get('pp_acc') else "-",
+            "acc": f"{acc_val:.2f}",
+            "max_combo": str(score_info.get("max_combo", 0)),
+            "total_combo": str(score_info.get("map_max_combo", calc_total_combo) or calc_total_combo),
+            "count_300": str(stats.get("count_300", stats.get("great", 0))),
+            "count_100": str(stats.get("count_100", stats.get("ok", 0))),
+            "count_50": str(stats.get("count_50", stats.get("meh", 0))),
+            "count_miss": str(stats.get("count_miss", stats.get("miss", 0))),
+        }
+
+        template = self.env.get_template("index.html")
+        rendered_html = template.render(**context)
+        
+        # 将 HTML 保存到临时文件，由于 playwright async_playwright 打开 file://
+        temp_html_path = Path(__file__).parent / f"temp_{score_info.get('created_at', 'score').replace(' ', '_').replace(':', '')}.html"
+        
         try:
-            return await self._generate_with_background(user_info, score_info, beatmap_info)
-        except Exception as e:
-            print(f"Failed to generate with background: {e}, falling back to simple mode")
-            return await self._generate_simple(user_info, score_info, beatmap_info)
-    
-    async def _generate_with_background(
-        self,
-        user_info: Dict[str, Any],
-        score_info: Dict[str, Any],
-        beatmap_info: Dict[str, Any]
-    ) -> BytesIO:
-        """带背景图的完整版本"""
-        # 创建画布
-        im = Image.new("RGBA", (self.width, self.height))
-        draw = ImageDraw.Draw(im)
-        
-        # 第1层：下载并处理谱面背景（全屏）
-        beatmapset_id = beatmap_info.get("beatmapset_id")
-        if beatmapset_id:
-            bg_img = await download_beatmap_cover(beatmapset_id)
-            if bg_img:
-                # 裁剪到合适尺寸
-                bg_cropped = await crop_bg((self.width, self.height), bg_img)
-                # 应用高斯模糊
-                bg_blurred = bg_cropped.filter(ImageFilter.GaussianBlur(10))
-                # 降低亮度
-                bg_dimmed = ImageEnhance.Brightness(bg_blurred).enhance(0.5)
-                # 合成到画布
-                im.alpha_composite(bg_dimmed, (0, 0))
-        
-        # 第2层：游戏模式背景模板
-        mode = str(score_info.get("mode", "0"))
-        if mode in self.assets.mode_backgrounds:
-            mode_bg = self.assets.mode_backgrounds[mode]
-            # 如果模板尺寸不匹配，调整大小
-            if mode_bg.size != (self.width, self.height):
-                mode_bg = mode_bg.resize((self.width, self.height), Image.Resampling.LANCZOS)
-            im.alpha_composite(mode_bg, (0, 0))
-        
-        # 第2.3层：红框区域的beatmap背景（左上方谱面信息卡片）
-        try:
-            beatmapset_id = beatmap_info.get("beatmapset_id")
-            if beatmapset_id:
-                card_bg = await download_beatmap_cover(beatmapset_id)
-                if card_bg:
-                    # 裁剪到红框区域大小（宽约640, 高约220，不覆盖下面的5个图标）
-                    card_bg_cropped = await crop_bg((640, 220), card_bg)
-                    # 降低亮度，避免覆盖文字
-                    card_bg_dimmed = ImageEnhance.Brightness(card_bg_cropped).enhance(0.35)
-                    # 添加圆角效果
-                    card_bg_fillet = draw_fillet(card_bg_dimmed, 10)
-                    # 贴在左上方 (30, 50)
-                    im.alpha_composite(card_bg_fillet, (30, 50))
-        except Exception as e:
-            print(f"Failed to apply beatmap background to card: {e}")
-            
-        # 第2.5层：用户个人Banner背景（如果存在 cover_url）
-        user_id = user_info.get('id')
-        cover_url = user_info.get('cover_url')
-        if cover_url and user_id:
-            try:
-                user_bg = await download_user_cover(cover_url, user_id)
-                if user_bg:
-                    # 裁剪为固定大小的矩形，适应左下方黑框大小 (533, 213)
-                    user_bg_cropped = await crop_bg((533, 213), user_bg)
-                    # 降低亮度以确保文字清晰 (原项目 enhance(2/4.0))
-                    user_bg_dimmed = ImageEnhance.Brightness(user_bg_cropped).enhance(0.5)
-                    user_bg_fillet = draw_fillet(user_bg_dimmed, 15)
-                    # 贴在左下方用户资料区域 (17, 500)
-                    im.alpha_composite(user_bg_fillet, (17, 500))
-            except Exception as e:
-                print(f"Failed to process user cover banner: {e}")
-        
-        # 第3层：绘制文本和信息
-        await self._draw_score_info(im, draw, user_info, score_info, beatmap_info)
-        
-        # 第4层：Mod图标
-        await self._draw_mod_icons(im, score_info)
-        
-        # 第5层：排名图标
-        await self._draw_rank_icon(im, score_info)
-        
-        # 第6层：用户头像 (27, 532) 大小170x170，圆角15
-        avatar_url = user_info.get('avatar_url')
-        user_id = user_info.get('id')
-        if avatar_url and user_id:
-            try:
-                avatar_img = await download_user_avatar(avatar_url, user_id)
-                if avatar_img:
-                    # 调整大小为170x170
-                    avatar_img = avatar_img.resize((170, 170), Image.Resampling.LANCZOS)
-                    # 添加圆角
-                    avatar_img = draw_fillet(avatar_img, 15)
-                    # 合成到主图
-                    im.alpha_composite(avatar_img, (27, 532))
-            except Exception as e:
-                print(f"Failed to composite avatar: {e}")
+            with open(temp_html_path, "w", encoding="utf-8") as f:
+                f.write(rendered_html)
                 
-        # 去除已移动的 第6.1层
-        # 转换为BytesIO
-        img_bytes = BytesIO()
-        im.save(img_bytes, format="PNG")
-        img_bytes.seek(0)
-        return img_bytes
-    
-    async def _draw_score_info(
-        self,
-        im: Image.Image,
-        draw: ImageDraw.ImageDraw,
-        user_info: Dict[str, Any],
-        score_info: Dict[str, Any],
-        beatmap_info: Dict[str, Any]
-    ):
-        """绘制成绩信息文本 - 完全按照nonebot坐标"""
-        
-        # SetID (32, 25)
-        beatmapset_id = beatmap_info.get('beatmapset_id', '???')
-        draw.text(
-            (32, 25),
-            f"Setid：{beatmapset_id}",
-            font=self.assets.get_font('torus_sb_20'),
-            anchor="lm",
-            fill=(255, 255, 255, 255)
-        )
-        
-        # MapID (650, 25) - 右对齐
-        map_id = beatmap_info.get('id', beatmap_info.get('beatmap_id', '???'))
-        draw.text(
-            (650, 25),
-            f"Mapid: {map_id}",
-            font=self.assets.get_font('torus_sb_20'),
-            anchor="rm",
-            fill=(255, 255, 255, 255)
-        )
-        
-        # 获取难度与星级颜色
-        difficulty = beatmap_info.get("difficulty_rating", 0)
-        r, g, b = StarColorMapper().get_color(difficulty)
-        diff_color = (r, g, b, 255)
-        
-        # 谱面版本（难度标签） (65, 70)
-        version = beatmap_info.get('version', '???')
-        version_font = self.assets.get_font('torus_sb_15')
-        v_width = version_font.getlength(version)
-        
-        # 绘制半透明圆角矩形作为难度标签背景
-        diff_bg = Image.new("RGBA", (int(v_width + 40), 30), (0, 0, 0, 0))
-        ImageDraw.Draw(diff_bg).rounded_rectangle((0, 0, int(v_width + 40), 30), radius=15, fill=(0, 0, 0, 180))
-        im.alpha_composite(diff_bg, (50, 55))
-        
-        draw_text_with_outline(
-            draw,
-            (70, 70),
-            version,
-            version_font,
-            fill=diff_color,
-            anchor="lm"
-        )
-        
-        # 谱面标题 (80, 165)
-        title = beatmap_info.get('title', '???')
-        draw_text_with_outline(
-            draw,
-            (80, 165),
-            title,
-            self.assets.get_font('torus_sb_30'),
-            fill=(255, 255, 255, 255),
-            anchor="lm"
-        )
-        
-        # 艺术家 (80, 200)
-        # 如果有artist字段用artist，否则用beatmapset.artist，都没有就用creator
-        artist = beatmap_info.get('artist')
-        if not artist:
-            beatmapset = beatmap_info.get('beatmapset', {})
-            artist = beatmapset.get('artist', beatmap_info.get('creator', '???'))
-        
-        draw_text_with_outline(
-            draw,
-            (80, 200),
-            artist,
-            self.assets.get_font('torus_sb_20'),
-            fill=(255, 255, 255, 255),
-            anchor="lm"
-        )
-        
-        # 谱师 (80, 235)
-        creator = beatmap_info.get('creator', '???')
-        mapper_text = f"谱师: {creator}"
-        draw_text_with_outline(
-            draw,
-            (80, 235),
-            mapper_text,
-            self.assets.get_font('torus_sb_15'),
-            fill=(255, 255, 255, 255),
-            anchor="lm"
-        )
-        
-        # 星级 (570, 70) - 考虑到左侧曲名的缩进并且更贴近参考图排版
-        star_text = f"★{difficulty:.2f}"
-        star_font = self.assets.get_font('torus_sb_20')
-        s_width = star_font.getlength(star_text)
-        
-        # 星级背景方块
-        star_bg = Image.new("RGBA", (int(s_width + 40), 30), (0, 0, 0, 0))
-        ImageDraw.Draw(star_bg).rounded_rectangle((0, 0, int(s_width + 40), 30), radius=15, fill=(0, 0, 0, 255))
-        im.alpha_composite(star_bg, (int(570 - s_width/2 - 20), 55))  # 根据锚点适当调整
-        
-        draw_text_with_outline(
-            draw,
-            (570, 70),
-            star_text,
-            star_font,
-            fill=diff_color,
-            anchor="mm"
-        )
-        
-        # 评价/排名 (772, 185) - 移动到了 _draw_rank_icon 中使用图片绘制
-        pass
-        
-        # 分数 (880, 165)
-        score_value = score_info.get("score", 0)
-        draw.text(
-            (880, 165),
-            f"{score_value:,}",
-            font=self.assets.get_font('torus_r_60'),
-            anchor="lm",
-            fill=(255, 255, 255, 255)
-        )
-        
-        # 达成时间标签 (883, 230)
-        draw.text(
-            (883, 230),
-            "达成时间：",
-            font=self.assets.get_font('torus_sb_20'),
-            anchor="lm",
-            fill=(255, 255, 255, 255)
-        )
-        
-        # 达成时间值 (985, 230)
-        created_at = score_info.get("created_at", "")
-        if created_at:
-            draw.text(
-                (985, 230),
-                created_at,
-                font=self.assets.get_font('torus_sb_20'),
-                anchor="lm",
-                fill=(255, 255, 255, 255)
-            )
-        
-        # 玩家名 (208, 550)
-        username = user_info.get('username', '???')
-        font_30 = self.assets.get_font('torus_sb_30')
-        draw.text(
-            (208, 550),
-            username,
-            font=font_30,
-            anchor="lm",
-            fill=(255, 255, 255, 255)
-        )
-        
-        # Supporter 图标
-        is_supporter = user_info.get('is_supporter', False)
-        if is_supporter and self.assets.supporter_icon:
-            name_width = font_30.getlength(username)
-            im.alpha_composite(self.assets.supporter_icon, (int(208 + name_width + 10), 550 - 15))
-        
-        # 全球排名 - 标签在(883, 260)，数值在(985, 260)
-        global_rank = user_info.get('global_rank')
-        if global_rank and global_rank > 0:
-            draw.text(
-                (883, 260),
-                "全球排行：",
-                font=self.assets.get_font('torus_sb_20'),
-                anchor="lm",
-                fill=(255, 255, 255, 255)
-            )
-            draw.text(
-                (985, 260),
-                f"#{global_rank:,}",  # 使用逗号分隔千位
-                font=self.assets.get_font('torus_sb_25'),
-                anchor="lm",
-                fill=(255, 255, 255, 255)
-            )
-        
-        # 地区旗帜与地区排名 (208, 608)
-        country_code = user_info.get('country_code', 'XX').upper()
-        if country_code in self.assets.flags:
-            # 高度尺寸为45，中点为(608+22)~630
-            im.alpha_composite(self.assets.flags[country_code], (208, 608))
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                page = await browser.new_page(viewport={"width": 1100, "height": 600})
+                await page.goto(f"file://{temp_html_path.resolve()}")
+                
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=10000)
+                except Exception as e:
+                    pass # ignore timeout if some images fail to load
+                
+                img_bytes = await page.screenshot(type="png", clip={"x": 0, "y": 0, "width": 1100, "height": 600})
+                await browser.close()
+        finally:
+            if temp_html_path.exists():
+                os.remove(temp_html_path)
             
-        country_rank = user_info.get('country_rank')
-        if country_rank and country_rank > 0:
-            draw.text(
-                (283, 630),
-                f"#{country_rank:,}",  # 使用逗号分隔千位
-                font=self.assets.get_font('torus_sb_25'),
-                anchor="lm",
-                fill=(255, 255, 255, 255)
-            )
-        
-        def _to_int(value: Any) -> int:
-            try:
-                return int(value)
-            except (TypeError, ValueError):
-                return 0
-
-        def _to_float(value: Any) -> float:
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                return 0.0
-
-        # 获取游戏模式与统计。
-        mode = str(score_info.get('mode', '0'))
-        stats = score_info.get("statistics", {}) or {}
-
-        # PP值 (768, 438) - 所有模式统一位置
-        pp_value = _to_float(score_info.get("pp", 0))
-        draw.text(
-            (768, 438),
-            f"{pp_value:.0f}",
-            font=self.assets.get_font('torus_r_50'),
-            anchor="mm",
-            fill=(255, 255, 255, 255)
-        )
-
-        # 准确率 (768, 577) - 所有模式统一位置
-        accuracy = _to_float(score_info.get("accuracy", 0)) * 100
-        draw.text(
-            (768, 577),
-            f"{accuracy:.2f}%",
-            font=self.assets.get_font('torus_r_25'),
-            anchor="mm",
-            fill=(255, 255, 255, 255)
-        )
-
-        # Combo (768, 666) - std/catch 对齐参考显示当前/谱面最大连击。
-        max_combo = _to_int(score_info.get("max_combo", 0))
-        map_max_combo = _to_int(score_info.get("map_max_combo", 0))
-        if mode in {"0", "2"} and map_max_combo > 0:
-            combo_text = f"{max_combo:,}/{map_max_combo}"
-        else:
-            combo_text = f"{max_combo:,}"
-        draw.text(
-            (768, 666),
-            combo_text,
-            font=self.assets.get_font('torus_r_25'),
-            anchor="mm",
-            fill=(255, 255, 255, 255)
-        )
-
-        # 各模式 PP 字段展示。
-        ss_pp = _to_float(score_info.get('ss_pp', 0))
-        if_fc_pp = _to_float(score_info.get('if_fc_pp', 0))
-        pp_aim = _to_float(score_info.get('pp_aim', 0))
-        pp_speed = _to_float(score_info.get('pp_speed', 0))
-        pp_acc = _to_float(score_info.get('pp_acc', 0))
-
-        if mode == '0':
-            if if_fc_pp > 0:
-                draw.text((933, 393), f"{if_fc_pp:.0f}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            if ss_pp > 0:
-                draw.text((1066, 393), f"{ss_pp:.0f}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            if pp_aim > 0:
-                draw.text((933, 482), f"{pp_aim:.0f}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            if pp_speed > 0:
-                draw.text((1066, 482), f"{pp_speed:.0f}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            if pp_acc > 0:
-                draw.text((1200, 482), f"{pp_acc:.0f}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-
-            draw.text((933, 577), f"{_to_int(stats.get('count_300', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            draw.text((1066, 577), f"{_to_int(stats.get('count_100', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            draw.text((933, 666), f"{_to_int(stats.get('count_50', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            draw.text((1066, 666), f"{_to_int(stats.get('count_miss', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 68, 111, 255))
-
-        elif mode == '1':
-            if ss_pp > 0:
-                draw.text((933, 393), f"{ss_pp:.0f}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-
-            draw.text((933, 577), f"{_to_int(stats.get('count_300', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            draw.text((1066, 577), f"{_to_int(stats.get('count_100', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            draw.text((933, 666), f"{_to_int(stats.get('count_miss', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 68, 111, 255))
-
-        elif mode == '2':
-            if ss_pp > 0:
-                draw.text((933, 393), f"{ss_pp:.0f}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-
-            draw.text((933, 577), f"{_to_int(stats.get('count_300', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            draw.text((1066, 577), f"{_to_int(stats.get('count_100', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            draw.text((933, 666), f"{_to_int(stats.get('count_50', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            draw.text((1066, 666), f"{_to_int(stats.get('count_miss', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 68, 111, 255))
-
-        else:
-            if ss_pp > 0:
-                draw.text((933, 393), f"{ss_pp:.0f}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-
-            perfect = _to_int(stats.get('count_geki', 0))
-            great = _to_int(stats.get('count_300', 0))
-            ratio = "∞:1" if great == 0 else f"{perfect / great:.1f}:1"
-            draw.text((933, 600), ratio, font=self.assets.get_font('torus_r_15'), anchor="mm", fill=(255, 255, 255, 255))
-
-            draw.text((933, 577), f"{perfect}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            draw.text((1066, 577), f"{great}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            draw.text((1200, 577), f"{_to_int(stats.get('count_katu', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            draw.text((933, 666), f"{_to_int(stats.get('count_100', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            draw.text((1066, 666), f"{_to_int(stats.get('count_50', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 255, 255, 255))
-            draw.text((1200, 666), f"{_to_int(stats.get('count_miss', 0))}", font=self.assets.get_font('torus_r_25'), anchor="mm", fill=(255, 68, 111, 255))
-            
-        # ============== 新增：绘制左侧 Map Stats (CS, HP, OD, AR, SR) ==============
-        # 数据获取
-        cs = beatmap_info.get("cs", 0)
-        hp = beatmap_info.get("hp", beatmap_info.get("drain", 0))
-        od = beatmap_info.get("od", beatmap_info.get("accuracy", 0))
-        ar = beatmap_info.get("ar", 0)
-        sr = beatmap_info.get("difficulty_rating", 0)
-
-        # 对齐参考项目：mania 玩 std 转谱时，按转换规则修正显示用 CS。
-        if mode == "3" and str(beatmap_info.get("mode_int", 0)) == "0":
-            circles = _to_int(beatmap_info.get("count_circles", 0))
-            sliders = _to_int(beatmap_info.get("count_sliders", 0))
-            spinners = _to_int(beatmap_info.get("count_spinners", 0))
-            total_objects = circles + sliders + spinners
-            if total_objects > 0:
-                convert_ratio = (sliders + spinners) / total_objects
-                convert_od = round(_to_float(od))
-                if convert_ratio < 0.20 or ((convert_ratio < 0.30 or round(_to_float(cs)) >= 5) and convert_od > 5):
-                    cs = 7.0
-                elif (convert_ratio < 0.30 or round(_to_float(cs)) >= 5) and convert_od <= 5:
-                    cs = 6.0
-                elif convert_ratio > 0.60 and convert_od > 4:
-                    cs = 5.0
-                elif convert_ratio > 0.60 and convert_od <= 4:
-                    cs = 4.0
-                else:
-                    cs = max(4.0, min(_to_float(od) + 1, 7.0))
-        
-        map_stats = [cs, hp, od, ar]
-        for num, val in enumerate(map_stats):
-            # 将0-10的属性值映射到最大长度400
-            difflen = int(400 * max(0, val) / 10) if val <= 10 else 400
-            if difflen > 0:
-                diff_len_img = Image.new("RGBA", (difflen, 8), (255, 255, 255, 255))
-                im.alpha_composite(diff_len_img, (165, 352 + 35 * num))
-            
-            # 绘制属性数值 (610, 355 + 35 * num)
-            text_val = f"{val:.0f}" if val == round(val) else (f"{val:.2f}" if val != round(val, 1) else f"{val:.1f}")
-            draw.text(
-                (610, 355 + 35 * num),
-                text_val,
-                font=self.assets.get_font('torus_sb_20'),
-                anchor="mm",
-                fill=(255, 255, 255, 255)
-            )
-            
-        # 绘制 SR (490)
-        sr_difflen = int(400 * max(0.0, sr) / 10) if sr <= 10 else 400
-        if sr_difflen > 0:
-            sr_diff_len_img = Image.new("RGBA", (sr_difflen, 8), (255, 255, 255, 255))
-            im.alpha_composite(sr_diff_len_img, (165, 490))
-        
-        draw.text(
-            (610, 493),
-            f"{sr:.2f}",
-            font=self.assets.get_font('torus_sb_20'),
-            anchor="mm",
-            fill=(255, 255, 255, 255)
-        )
-        
-        # ============== 新增：上侧 5个图标数据 (时间, BPM, 单点, 滑条, 大回环) ==============
-        total_length = beatmap_info.get("total_length", 0)
-        bpm = beatmap_info.get("bpm", 0)
-        circles = beatmap_info.get("count_circles", 0)
-        sliders = beatmap_info.get("count_sliders", 0)
-        spinners = beatmap_info.get("count_spinners", 0)
-        
-        m, s = divmod(total_length, 60)
-        time_str = f"{m}:{s:02d}"
-        
-        bpm_str = f"{bpm:.1f}" if isinstance(bpm, float) else str(bpm)
-        
-        diff_info = [time_str, bpm_str, circles, sliders]
-        if str(score_info.get("mode", "0")) != "3":  # 非 Mania 模式添加大回环
-            diff_info.append(spinners)
-            
-        for num, val in enumerate(diff_info):
-            draw_text_with_outline(
-                draw,
-                (70 + 120 * num, 300),
-                str(val),
-                self.assets.get_font('torus_r_20'),
-                fill=self.accent_color,
-                anchor="lm"
-            )
-            
-    async def _draw_mod_icons(self, im: Image.Image, score_info: Dict[str, Any]):
-        """绘制Mod图标 - 按照nonebot坐标 (880 + 50*n, 100)"""
-        mods = score_info.get("mods", [])
-        if not mods:
-            return
-        
-        for idx, mod in enumerate(mods):
-            mod_name = mod if isinstance(mod, str) else mod.get("acronym", "")
-            
-            if mod_name in self.assets.mod_icons:
-                mod_icon = self.assets.mod_icons[mod_name]
-                # nonebot使用原始尺寸，不调整大小
-                # 位置：x = 880 + 50 * idx, y = 100
-                x = 880 + 50 * idx
-                y = 100
-                im.alpha_composite(mod_icon, (x, y))
-    
-    async def _draw_rank_icon(self, im: Image.Image, score_info: Dict[str, Any]):
-        """绘制排名大图标，替换掉原来的Venera文本"""
-        rank = score_info.get("rank", "F")
-        if rank in self.assets.rank_icons:
-            rank_icon = self.assets.rank_icons[rank]
-            # 原文字中心点坐标是 (772, 185)
-            # 等比例缩放图标让高度大概保持在合适大小 (例如 90)
-            target_h = 90
-            ratio = target_h / rank_icon.height
-            target_w = int(rank_icon.width * ratio)
-            
-            scaled_icon = rank_icon.resize((target_w, target_h), Image.Resampling.LANCZOS)
-            x = int(772 - target_w / 2)
-            y = int(185 - target_h / 2)
-            im.alpha_composite(scaled_icon, (x, y))
-        else:
-            # 万一没有图片就使用原字体作为后备
-            draw = ImageDraw.Draw(im)
-            draw.text(
-                (772, 185),
-                rank,
-                font=self.assets.get_font('venera_60'),
-                anchor="mm",
-                fill=(255, 255, 255, 255)
-            )
-    
-    async def _generate_simple(
-        self,
-        user_info: Dict[str, Any],
-        score_info: Dict[str, Any],
-        beatmap_info: Dict[str, Any]
-    ) -> BytesIO:
-        """简单模式（降级方案）"""
-        # 创建纯色背景
-        img = Image.new("RGB", (self.width, self.height), (20, 20, 30))
-        draw = ImageDraw.Draw(img)
-        
-        font_large = self.assets.get_font('torus_sb_30')
-        font_medium = self.assets.get_font('torus_r_20')
-        font_small = self.assets.get_font('torus_r_15')
-        
-        y = self.padding
-        
-        # 谱面信息
-        title_text = f"{beatmap_info.get('title', '???')} [{beatmap_info.get('version', '???')}]"
-        draw.text((self.padding, y), title_text, font=font_medium, fill=(255, 255, 255))
-        y += 40
-        
-        creator_text = f"by {beatmap_info.get('creator', '???')}"
-        draw.text((self.padding, y), creator_text, font=font_small, fill=(180, 180, 180))
-        y += 35
-        
-        # 玩家信息
-        player_text = f"Player: {user_info.get('username', '???')}"
-        draw.text((self.padding, y), player_text, font=font_medium, fill=(30, 215, 230))
-        y += 40
-        
-        # 成绩
-        score_value = score_info.get("score", 0)
-        score_text = f"Score: {format_number(score_value)}"
-        draw.text((self.padding, y), score_text, font=font_large, fill=(255, 255, 255))
-        y += 50
-        
-        # 详细信息
-        accuracy = score_info.get("accuracy", 0)
-        max_combo = score_info.get("max_combo", 0)
-        rank = score_info.get("rank", "D")
-        
-        draw.text((self.padding, y), f"Accuracy: {format_accuracy(accuracy)}", font=font_medium, fill=(255, 255, 255))
-        y += 35
-        draw.text((self.padding, y), f"Combo: {max_combo}x", font=font_medium, fill=(255, 255, 255))
-        y += 35
-        draw.text((self.padding, y), f"Rank: {rank}", font=font_medium, fill=(255, 255, 255))
-        
-        # 转换为BytesIO
-        img_bytes = BytesIO()
-        img.save(img_bytes, format="PNG")
-        img_bytes.seek(0)
-        return img_bytes
+        return BytesIO(img_bytes)
