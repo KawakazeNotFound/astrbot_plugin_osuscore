@@ -57,9 +57,9 @@ async def main():
         "pass_percent": "15",
         "fail_retry_bars": '<rect x="0" y="2" width="2" height="28" fill="rgba(255, 204, 85, 0.9)" rx="0.5"></rect><rect x="0" y="10" width="2" height="20" fill="rgba(255, 102, 170, 0.9)" rx="0.5"></rect><rect x="4" y="20" width="2" height="10" fill="rgba(255, 204, 85, 0.9)" rx="0.5"></rect><rect x="4" y="25" width="2" height="5" fill="rgba(255, 102, 170, 0.9)" rx="0.5"></rect><rect x="8" y="15" width="2" height="15" fill="rgba(255, 204, 85, 0.9)" rx="0.5"></rect>',
         "rating_avg": "9.47",
-        "rating_min": "3",
-        "rating_max": "103",
-        "rating_min_percent": "3"
+        "rating_min": 3,
+        "rating_max": 103,
+        "rating_negative_percent": 2.8
     }
 
     # 1. 使用 Jinja2 渲染 HTML
@@ -79,7 +79,7 @@ async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         # 固定视口尺寸
-        page = await browser.new_page(viewport={"width": 1100, "height": 600})
+        page = await browser.new_page(viewport={"width": 1100, "height": 700})
         
         # 加载本地生成的 HTML
         await page.goto(f"file://{temp_html_path.resolve()}")
@@ -88,7 +88,7 @@ async def main():
         
         # 截图
         output_path = Path(__file__).parent / "test_score_render.png"
-        await page.screenshot(path=str(output_path), clip={"x": 0, "y": 0, "width": 1100, "height": 600})
+        await page.screenshot(path=str(output_path), clip={"x": 0, "y": 0, "width": 1100, "height": 700})
         await browser.close()
         
     print(f"图片生成完毕！保存在: {output_path}")

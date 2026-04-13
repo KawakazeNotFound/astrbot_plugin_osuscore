@@ -29,7 +29,7 @@
 
         body {
             width: 1100px;
-            height: 600px;
+            height: 700px;
             overflow: hidden;
             font-family: 'Nunito', 'Torus', sans-serif;
             color: var(--text-main);
@@ -40,7 +40,7 @@
         /* ---------------- 背景 ---------------- */
         .bg-layer {
             position: absolute;
-            top: -20px; left: -20px; right: -20px; bottom: -20px;
+            top: -20px; left: -20px; right: -20px; bottom: -120px;
             background: url("{{ bg_url }}") center/cover no-radius no-repeat;
             filter: blur(8px) brightness(0.85);
             z-index: 1;
@@ -164,7 +164,7 @@
             bottom: 20px;
             left: 20px;
             right: 20px;
-            height: 410px;
+            height: 510px;
             background: rgba(30, 45, 30, 0.7); /* 暗绿色基调 */
             border-radius: var(--main-radius);
             box-shadow: inset 0 1px 1px rgba(255,255,255,0.1), 0 8px 30px rgba(0,0,0,0.5);
@@ -288,23 +288,27 @@
         }
         .rating-bar-container {
             position: relative;
-            height: 6px;
+            height: 8px;
             width: 100%;
-            background: #88ee22;
-            border-radius: 1px;
-            margin-top: 4px;
+            background: #55d0ff;
+            border-radius: 2px;
+            margin-top: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            overflow: hidden;
         }
         .rating-bar-fill {
             height: 100%;
             background: #f8a139;
-            border-radius: 1px 0 0 1px;
+            border-radius: 2px 0 0 2px;
+            display: block;
         }
         .rating-labels {
             display: flex;
             justify-content: space-between;
-            font-size: 10px;
+            font-size: 12px;
             font-weight: 700;
-            margin-top: 2px;
+            margin-top: 5px;
+            color: #fff;
         }
 
         /* 属性指标面板 */
@@ -640,14 +644,14 @@
                 </div>
             </div>
 
-            <div class="panel rating-panel">
+            <div class="panel rating-panel" style="gap: 8px;">
                 <div class="rating-title">玩家评价 ({{ rating_avg }})</div>
-                <div class="rating-bar-container">
-                    <div class="rating-bar-fill" style="width: {{ rating_min_percent }}%;"></div>
-                </div>
-                <div class="rating-labels">
-                    <span>{{ rating_min }}</span>
-                    <span>{{ rating_max }}</span>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                    <span style="font-size: 12px; font-weight: 700; color: #fff;">{{ rating_min }}</span>
+                    <div class="rating-bar-container" style="margin-top: 0; flex: 1;">
+                        <div class="rating-bar-fill" style="width: {{ rating_negative_percent }}%;"></div>
+                    </div>
+                    <span style="font-size: 12px; font-weight: 700; color: #fff;">{{ rating_max }}</span>
                 </div>
             </div>
 

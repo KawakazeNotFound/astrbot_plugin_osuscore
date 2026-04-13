@@ -70,6 +70,26 @@ def adapt_api_data_for_image(api_score_data: Dict[str, Any]) -> tuple:
     beatmap_data = api_score_data.get('beatmap', {})
     beatmapset_data = api_score_data.get('beatmapset', {})
     
+    # 评级计算
+    ratings = beatmapset_data.get('ratings', [])
+    rating_negative = 0
+    rating_positive = 0
+    ratings_avg = 0
+    if isinstance(ratings, list) and len(ratings) > 0:
+        # ratings数组索引就是分数(0-10)，值是该分数的投票人数
+        # 1-4分视为差评，5-10分视为好评
+        for i, count in enumerate(ratings):
+            if 0 < i < 5:
+                rating_negative += count
+            elif i >= 5:
+                rating_positive += count
+        
+        # 计算平均分 (1-10)
+        total_votes = sum(ratings)
+        if total_votes > 0:
+            total_score = sum(i * count for i, count in enumerate(ratings))
+            ratings_avg = total_score / total_votes
+    
     beatmap_info = {
         # 谱面ID
         'id': beatmap_data.get('id'),
@@ -105,6 +125,11 @@ def adapt_api_data_for_image(api_score_data: Dict[str, Any]) -> tuple:
         
         # 封面图
         'covers': beatmapset_data.get('covers', {}),
+        
+        # 评价
+        'rating_negative': rating_negative,
+        'rating_positive': rating_positive,
+        'ratings_avg': ratings_avg,
         
         # 模式
         'mode': beatmap_data.get('mode', 'osu'),

@@ -100,9 +100,12 @@ class ScoreImageGenerator:
                 beatmap_info.get("failtimes", {}).get("fail", [])
             ),
             "rating_avg": f"{beatmap_info.get('ratings_avg', 0):.2f}" if 'ratings_avg' in beatmap_info else "0.00",
-            "rating_min": "0", # Replace with actual min
-            "rating_max": "0", # Replace with actual max
-            "rating_min_percent": "0",
+            "rating_min": beatmap_info.get("rating_negative", 0),
+            "rating_max": beatmap_info.get("rating_positive", 0),
+            "rating_negative_percent": self._calculate_rating_percent(
+                beatmap_info.get("rating_negative", 0),
+                beatmap_info.get("rating_positive", 0)
+            ),
             "avatar_url": user_info.get("avatar_url", ""),
             "user_name": user_info.get("username", ""),
             "is_supporter": user_info.get("is_supporter", False),
@@ -156,6 +159,14 @@ class ScoreImageGenerator:
                 svg_parts.append(f'<rect x="{x:.1f}" y="{30 - f_h:.1f}" width="{width_step * 0.8:.1f}" height="{f_h:.1f}" fill="rgba(255, 102, 170, 0.9)" rx="0.5"></rect>')
 
         return "".join(svg_parts)
+
+    def _calculate_rating_percent(self, negative: int, positive: int) -> str:
+        """Calculate negative rating percentage. Negative + Positive = 100%"""
+        total = negative + positive
+        if total == 0:
+            return "0"
+        percent = (negative / total) * 100
+        return f"{percent:.1f}"
         
         # 将 HTML 保存到临时文件，由于 playwright async_playwright 打开 file://
         temp_html_path = Path(__file__).parent / f"temp_{score_info.get('created_at', 'score').replace(' ', '_').replace(':', '')}.html"
