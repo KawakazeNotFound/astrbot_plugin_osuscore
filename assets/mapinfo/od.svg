@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg viewBox="0 0 562.5 562.5" height="562.5" width="562.5" xmlns="http://www.w3.org/2000/svg">
+  <g transform="matrix(1.25,0,0,-1.25,0,562.5)">
+    <path
+         style="fill:#441188;fill-opacity:1;fill-rule:evenodd;stroke:none"
+         d="m 410.8631,145.698 c 43.7972,43.7973 43.7972,114.8067 0,158.604 0,0 -106.5611,106.5611 -106.5611,106.5611 -43.7973,43.7972 -114.8067,43.7972 -158.604,0 0,0 -106.56109,-106.5611 -106.56109,-106.5611 -43.797259,-43.7973 -43.797259,-114.8067 0,-158.604 0,0 106.56109,-106.56109 106.56109,-106.56109 43.7973,-43.797259 114.8067,-43.797259 158.604,0 0,0 106.5611,106.56109 106.5611,106.56109 z" />
+    
+<circle cx="225" cy="225" r="120" style="fill:none;stroke:#ffdd55;stroke-width:24" />
+<circle cx="225" cy="225" r="65" style="fill:none;stroke:#ffdd55;stroke-width:24" />
+<circle cx="225" cy="225" r="28" style="fill:#ffdd55" />
+<path d="M 215,215 L 125,125" style="fill:none;stroke:#ffdd55;stroke-width:24;stroke-linecap:round" />
+<path d="M 125,125 L 125,150 M 125,125 L 150,125" style="fill:none;stroke:#ffdd55;stroke-width:24;stroke-linecap:round;stroke-linejoin:round" />
+
+  </g>
+</svg>
