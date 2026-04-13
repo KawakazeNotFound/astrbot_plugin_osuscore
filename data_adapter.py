@@ -27,6 +27,8 @@ def adapt_api_data_for_image(api_score_data: Dict[str, Any]) -> tuple:
         'global_rank': user_data.get('statistics', {}).get('global_rank', 0) if 'statistics' in user_data else 0,
         'country_rank': user_data.get('statistics', {}).get('country_rank', 0) if 'statistics' in user_data else 0,
         'pp': user_data.get('statistics', {}).get('pp', 0) if 'statistics' in user_data else 0,
+        'level': user_data.get('statistics', {}).get('level', {}).get('current', 0) if 'statistics' in user_data else 0,
+        'level_progress': user_data.get('statistics', {}).get('level', {}).get('progress', 0) if 'statistics' in user_data else 0,
     }
     
     # 提取score信息
@@ -130,6 +132,9 @@ def adapt_api_data_for_image(api_score_data: Dict[str, Any]) -> tuple:
         'rating_negative': rating_negative,
         'rating_positive': rating_positive,
         'ratings_avg': ratings_avg,
+        
+        # failtimes
+        'failtimes': beatmap_data.get('failtimes', {}),
         
         # 模式
         'mode': beatmap_data.get('mode', 'osu'),

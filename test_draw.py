@@ -48,10 +48,6 @@ async def test_score_image():
         
         # 检查资源加载情况
         print("\nAssets loaded:")
-        print(f"  Fonts: {len(generator.assets.fonts)} loaded")
-        print(f"  Mod icons: {len(generator.assets.mod_icons)} loaded")
-        print(f"  Rank icons: {len(generator.assets.rank_icons)} loaded")
-        print(f"  Mode backgrounds: {len(generator.assets.mode_backgrounds)} loaded")
         
     except Exception as e:
         print(f"[ERROR] Failed to generate image: {e}")

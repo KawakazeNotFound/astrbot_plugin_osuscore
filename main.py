@@ -197,20 +197,34 @@ class OsuScorePlugin(Star):
             score = scores[0]
             logger.info(f"First score keys: {score.keys() if isinstance(score, dict) else 'not a dict'}")
 
+            # 首先获取完整的用户统计信息
+            try:
+                full_user_info = await self.api_client.get_user(str(osu_id), mode=mode_api)
+                if full_user_info:
+                    if 'user' not in score:
+                        score['user'] = {}
+                    score['user']['statistics'] = full_user_info.get('statistics', {})
+                    score['user']['is_supporter'] = full_user_info.get('is_supporter', False)
+            except Exception as e:
+                logger.warning(f"Failed to get full user info: {e}")
+
+            # 额外获取完整谱面信息（用于 ratings 和 failtimes）
+            try:
+                full_beatmap = await self.api_client.get_beatmap(score['beatmap']['id'])
+                if 'beatmap' not in score:
+                    score['beatmap'] = full_beatmap
+                else:
+                    score['beatmap'].update(full_beatmap)
+                
+                if 'beatmapset' not in score:
+                    score['beatmapset'] = full_beatmap.get('beatmapset', {})
+                else:
+                    score['beatmapset'].update(full_beatmap.get('beatmapset', {}))
+            except Exception as e:
+                logger.warning(f"Failed to fetch full beatmap: {e}")
+
             # 使用数据适配器转换API数据
             user_info, score_data, beatmap_data = adapt_api_data_for_image(score)
-            
-            # 如果score响应中没有用户统计信息，额外获取
-            if not user_info.get('global_rank') or not user_info.get('country_rank'):
-                try:
-                    full_user_info = await self.api_client.get_user(str(osu_id), mode=mode_api)
-                    if full_user_info:
-                        stats = full_user_info.get('statistics', {})
-                        user_info['global_rank'] = stats.get('global_rank', 0)
-                        user_info['country_rank'] = stats.get('country_rank', 0)
-                        user_info['pp'] = stats.get('pp', 0)
-                except Exception as e:
-                    logger.warning(f"Failed to get user statistics: {e}")
             
             # 计算PP信息（IF FC, SS PP, PP分解）
             try:

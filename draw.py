@@ -99,6 +99,8 @@ class ScoreImageGenerator:
                 beatmap_info.get("failtimes", {}).get("exit", []),
                 beatmap_info.get("failtimes", {}).get("fail", [])
             ),
+            "level": str(user_info.get("level", 0)),
+            "level_progress": f"{user_info.get('level_progress', 0):.0f}",
             "rating_avg": f"{beatmap_info.get('ratings_avg', 0):.2f}" if 'ratings_avg' in beatmap_info else "0.00",
             "rating_min": beatmap_info.get("rating_negative", 0),
             "rating_max": beatmap_info.get("rating_positive", 0),
@@ -145,7 +147,7 @@ class ScoreImageGenerator:
                 
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page(viewport={"width": 1100, "height": 600})
+                page = await browser.new_page(viewport={"width": 1100, "height": 700})
                 await page.goto(f"file://{temp_html_path.resolve()}")
                 
                 try:
@@ -153,7 +155,7 @@ class ScoreImageGenerator:
                 except Exception as e:
                     pass # ignore timeout if some images fail to load
                 
-                img_bytes = await page.screenshot(type="png", clip={"x": 0, "y": 0, "width": 1100, "height": 600})
+                img_bytes = await page.screenshot(type="png", clip={"x": 0, "y": 0, "width": 1100, "height": 700})
                 await browser.close()
         finally:
             if temp_html_path.exists():
