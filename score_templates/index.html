@@ -161,16 +161,11 @@
             object-fit: cover;
         }
 
-        .heart-icon {
-            background: #ff66aa;
-            border-radius: 50%;
+        .supporter-icon {
             width: 26px;
             height: 26px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            object-fit: contain;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
         }
         
         .user-stats-right {
@@ -656,7 +651,7 @@
                             <img src="{{ flag_url }}" class="flag" alt="flag">
                         </div>
                         {% if is_supporter %}
-                        <div class="heart-icon">♥</div>
+                        <img src="{{ assets_dir }}/work/supporter.png" class="supporter-icon" alt="supporter">
                         {% endif %}
                     </div>
                     
