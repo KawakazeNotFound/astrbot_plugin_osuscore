@@ -109,6 +109,7 @@ class ScoreImageGenerator:
                 beatmap_info.get("rating_positive", 0)
             ),
             "avatar_url": user_info.get("avatar_url", ""),
+            "cover_url": user_info.get("cover_url", ""),
             "user_name": user_info.get("username", ""),
             "is_supporter": user_info.get("is_supporter", False),
             "flag_url": f"https://osu.ppy.sh/images/flags/{user_info.get('country_code', 'XX')}.png",

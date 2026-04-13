@@ -58,15 +58,17 @@
         }
 
         .user-panel {
-            background: rgba(25, 20, 30, 0.6);
+            background-color: rgba(25, 20, 30, 0.6);
             backdrop-filter: blur(10px);
             border-radius: 16px;
             display: flex;
             padding: 12px;
             gap: 15px;
-            width: 320px; /* 调整宽度以容纳等多久字 */
+            width: 320px;
             height: 130px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            position: relative;
+            overflow: hidden;
         }
 
         .avatar-wrap {
@@ -580,7 +582,7 @@
 
     <!-- 顶部 -->
     <div class="header-container">
-        <div class="user-panel">
+        <div class="user-panel" {% if cover_url %}style="background: linear-gradient(rgba(20, 20, 30, 0.7), rgba(20, 20, 30, 0.7)), url('{{ cover_url }}') center/cover no-repeat;"{% endif %}>
             <div class="avatar-wrap">
                 <img src="{{ avatar_url }}" alt="avatar" class="avatar">
                 <div class="flag-box">

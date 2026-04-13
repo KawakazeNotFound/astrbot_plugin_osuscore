@@ -117,6 +117,11 @@ async def test_with_real_api_data():
             'pm_friends_only': False,
             'profile_colour': None,
             'username': '-Lilac-',
+            'cover': {
+                'custom_url': 'https://assets.ppy.sh/user-profile-covers/36148327/939e6aedc5b59a60e0a5ccae2a87a742ce790320ee802f06dfab72f8fdc8303f.jpeg',
+                'url': 'https://assets.ppy.sh/user-profile-covers/36148327/939e6aedc5b59a60e0a5ccae2a87a742ce790320ee802f06dfab72f8fdc8303f.jpeg',
+                'id': '36148327'
+            },
             # 手动添加统计信息（模拟get_user API返回）
             'statistics': {
                 'global_rank': 123456,

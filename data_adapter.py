@@ -21,7 +21,7 @@ def adapt_api_data_for_image(api_score_data: Dict[str, Any]) -> tuple:
         'username': user_data.get('username', '???'),
         'country_code': user_data.get('country_code', 'XX'),
         'avatar_url': user_data.get('avatar_url', ''),
-        'cover_url': user_data.get('cover_url', ''),
+        'cover_url': user_data.get('cover', {}).get('url', user_data.get('cover_url', '')),
         'is_supporter': user_data.get('is_supporter', False),
         # 从user的statistics中获取排名信息（如果有）
         'global_rank': user_data.get('statistics', {}).get('global_rank', 0) if 'statistics' in user_data else 0,
