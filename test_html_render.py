@@ -55,8 +55,11 @@ async def main():
         "pass_count": "4501",
         "play_count": "30403",
         "pass_percent": "15",
-        "fail_graph_path": "L5,28 L8,25 L10,25 L12,20 L15,22",
-        "retry_graph_path": "L5,29 L8,26 L10,24 L12,22 L15,18"
+        "fail_retry_bars": '<rect x="0" y="2" width="2" height="28" fill="rgba(255, 204, 85, 0.9)" rx="0.5"></rect><rect x="0" y="10" width="2" height="20" fill="rgba(255, 102, 170, 0.9)" rx="0.5"></rect><rect x="4" y="20" width="2" height="10" fill="rgba(255, 204, 85, 0.9)" rx="0.5"></rect><rect x="4" y="25" width="2" height="5" fill="rgba(255, 102, 170, 0.9)" rx="0.5"></rect><rect x="8" y="15" width="2" height="15" fill="rgba(255, 204, 85, 0.9)" rx="0.5"></rect>',
+        "rating_avg": "9.47",
+        "rating_min": "3",
+        "rating_max": "103",
+        "rating_min_percent": "3"
     }
 
     # 1. 使用 Jinja2 渲染 HTML

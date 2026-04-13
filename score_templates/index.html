@@ -264,19 +264,47 @@
             background: linear-gradient(to right, #4290fb, #4fc0ff, #4fffd5, #7cff4f, #f6f05c, #ff8068, #ff4e6f, #c645b8, #6563de, #18158e);
             margin-top: 10px;
         }
-
-        /* 密度图面板 */
-        .density-panel {
-            height: 100px;
-            display: flex;
-            flex-direction: column;
-        }
         
         /* 失败与重试图面板 */
         .fail-panel {
             height: 100px;
             display: flex;
             flex-direction: column;
+        }
+
+        /* 评分分布面板 */
+        .rating-panel {
+            height: 60px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            padding: 10px 15px;
+            justify-content: center;
+        }
+        .rating-title {
+            text-align: center;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .rating-bar-container {
+            position: relative;
+            height: 6px;
+            width: 100%;
+            background: #88ee22;
+            border-radius: 1px;
+            margin-top: 4px;
+        }
+        .rating-bar-fill {
+            height: 100%;
+            background: #f8a139;
+            border-radius: 1px 0 0 1px;
+        }
+        .rating-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            font-weight: 700;
+            margin-top: 2px;
         }
 
         /* 属性指标面板 */
@@ -598,20 +626,6 @@
                 <div class="rainbow-bar"></div>
             </div>
 
-            <div class="panel density-panel">
-                <div style="display:flex; justify-content:space-between;">
-                    <span class="panel-label">Density</span>
-                    <span class="panel-label">User Rating: 0 / 10</span>
-                </div>
-                
-                <!-- Density Graph (Mock) -->
-                <div style="flex:1; display:flex; align-items:flex-end;">
-                    <svg width="100%" height="30" preserveAspectRatio="none" viewBox="0 0 100 30">
-                        <path d="M0,25 L10,20 L20,28 L30,15 L40,18 L50,0  L60,15 L70,22 L80,18 L90,26 L100,20 L100,30 L0,30 Z" fill="rgba(85,208,255,0.4)" stroke="#55d0ff" stroke-width="1"></path>
-                    </svg>
-                </div>
-            </div>
-
             <div class="panel fail-panel">
                 <div style="display:flex; justify-content:space-between;">
                     <span class="panel-label">Retry & Fail</span>
@@ -621,9 +635,19 @@
                 <!-- Fail Graph -->
                 <div style="flex:1; display:flex; align-items:flex-end;">
                     <svg width="100%" height="30" preserveAspectRatio="none" viewBox="0 0 100 30" id="fail-graph">
-                        <path d="M0,30 {{ fail_graph_path }} Q100,30 100,30 Z" fill="rgba(255, 102, 170, 0.6)"></path>
-                        <path d="M0,30 {{ retry_graph_path }} Q100,30 100,30 Z" fill="rgba(255, 204, 85, 0.6)"></path>
+                        {{ fail_retry_bars }}
                     </svg>
+                </div>
+            </div>
+
+            <div class="panel rating-panel">
+                <div class="rating-title">玩家评价 ({{ rating_avg }})</div>
+                <div class="rating-bar-container">
+                    <div class="rating-bar-fill" style="width: {{ rating_min_percent }}%;"></div>
+                </div>
+                <div class="rating-labels">
+                    <span>{{ rating_min }}</span>
+                    <span>{{ rating_max }}</span>
                 </div>
             </div>
 

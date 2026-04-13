@@ -95,8 +95,14 @@ class ScoreImageGenerator:
             "pass_count": min(99999, beatmap_info.get("passcount", 0)),
             "play_count": max(1, beatmap_info.get("playcount", 1)),
             "pass_percent":  f"{(beatmap_info.get('passcount', 0) / max(1, beatmap_info.get('playcount', 1))) * 100:.0f}",
-            "fail_graph_path": self._generate_graph_path(beatmap_info.get("failtimes", {}).get("fail", [])),
-            "retry_graph_path": self._generate_graph_path(beatmap_info.get("failtimes", {}).get("exit", [])),
+            "fail_retry_bars": self._generate_bar_graph(
+                beatmap_info.get("failtimes", {}).get("exit", []),
+                beatmap_info.get("failtimes", {}).get("fail", [])
+            ),
+            "rating_avg": f"{beatmap_info.get('ratings_avg', 0):.2f}" if 'ratings_avg' in beatmap_info else "0.00",
+            "rating_min": "0", # Replace with actual min
+            "rating_max": "0", # Replace with actual max
+            "rating_min_percent": "0",
             "avatar_url": user_info.get("avatar_url", ""),
             "user_name": user_info.get("username", ""),
             "is_supporter": user_info.get("is_supporter", False),
@@ -125,25 +131,31 @@ class ScoreImageGenerator:
         rendered_html = template.render(**context)
         return rendered_html
 
-    def _generate_graph_path(self, data: list) -> str:
-        if not data:
-            return ""
+    def _generate_bar_graph(self, retries: list, fails: list) -> str:
+        length = max(len(retries), len(fails), 1)
+        max_r = max(retries) if retries else 0
+        max_f = max(fails) if fails else 0
+        max_val = max(max_r, max_f, 1)
+
+        svg_parts = []
+        width_step = 100 / length
         
-        # Take up to 100 points
-        max_val = max(data) if data else 1
-        if max_val == 0: max_val = 1
-        
-        # Calculate width spacing based on length (map to 0-100)
-        width_step = 100 / max(len(data), 1)
-        
-        path_parts = []
-        for i, val in enumerate(data):
+        for i in range(length):
             x = i * width_step
-            # SVG y goes top to bottom, 30 is base height
-            y = 30 - (val / max_val * 25) 
-            path_parts.append(f"L{x:.1f},{y:.1f}")
-            
-        return " ".join(path_parts)
+            r_val = retries[i] if i < len(retries) else 0
+            f_val = fails[i] if i < len(fails) else 0
+
+            r_h = (r_val / max_val) * 30
+            f_h = (f_val / max_val) * 30
+
+            # Draw retry (yellow) and fail (pink) as overlapping rects
+            # Normally drawn retry at back, fail on top or vice versa
+            if r_h > 0:
+                svg_parts.append(f'<rect x="{x:.1f}" y="{30 - r_h:.1f}" width="{width_step * 0.8:.1f}" height="{r_h:.1f}" fill="rgba(255, 204, 85, 0.9)" rx="0.5"></rect>')
+            if f_h > 0:
+                svg_parts.append(f'<rect x="{x:.1f}" y="{30 - f_h:.1f}" width="{width_step * 0.8:.1f}" height="{f_h:.1f}" fill="rgba(255, 102, 170, 0.9)" rx="0.5"></rect>')
+
+        return "".join(svg_parts)
         
         # 将 HTML 保存到临时文件，由于 playwright async_playwright 打开 file://
         temp_html_path = Path(__file__).parent / f"temp_{score_info.get('created_at', 'score').replace(' ', '_').replace(':', '')}.html"
