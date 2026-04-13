@@ -29,6 +29,7 @@ def adapt_api_data_for_image(api_score_data: Dict[str, Any]) -> tuple:
         'pp': user_data.get('statistics', {}).get('pp', 0) if 'statistics' in user_data else 0,
         'level': user_data.get('statistics', {}).get('level', {}).get('current', 0) if 'statistics' in user_data else 0,
         'level_progress': user_data.get('statistics', {}).get('level', {}).get('progress', 0) if 'statistics' in user_data else 0,
+        'hit_accuracy': user_data.get('statistics', {}).get('hit_accuracy', 0) if 'statistics' in user_data else 0,
     }
     
     # 提取score信息

@@ -1,0 +1,36 @@
+    <div class="header-container">
+        <div class="user-panel" {% if cover_url %}style="background: url('{{ cover_url }}') center/cover no-repeat;"{% endif %}>
+            <!-- Dark slight overlay left/bottom for text readability if needed, or just let text-shadow work -->
+            <div style="position: absolute; inset: 0; background: linear-gradient(135deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.5) 100%); z-index: 0;"></div>
+            
+            <div style="position: relative; z-index: 1; display: flex; width: 100%; height: 100%;">
+                <div class="avatar-col">
+                    <img src="{{ avatar_url }}" alt="avatar" class="avatar">
+                    <div class="rank-labels">
+                        <span class="global-rank">#{{ global_rank }}</span>
+                        <span class="country-rank">{{ country_code }}#{{ country_rank }}</span>
+                    </div>
+                </div>
+                
+                <div class="user-details">
+                    <div class="username-row">{{ user_name }}</div>
+                    
+                    <div class="badges-row">
+                        <div class="flag-box">
+                            <img src="{{ flag_url }}" class="flag" alt="flag">
+                        </div>
+                        {% if is_supporter %}
+                        <div class="heart-icon">♥</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="user-stats-right">
+                        <div class="play-pp">+{{ pp }}PP</div>
+                        <div class="level-row">{{ hit_accuracy }}% Lv.{{ level }}({{ level_progress }}%)</div>
+                        <div class="user-total-pp">{{ user_pp }}PP</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="header-right">
