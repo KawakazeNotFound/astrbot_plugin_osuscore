@@ -51,7 +51,12 @@ async def main():
         "count_300": "375",
         "count_100": "31",
         "count_50": "5",
-        "count_miss": "10"
+        "count_miss": "10",
+        "pass_count": "4501",
+        "play_count": "30403",
+        "pass_percent": "15",
+        "fail_graph_path": "L5,28 L8,25 L10,25 L12,20 L15,22",
+        "retry_graph_path": "L5,29 L8,26 L10,24 L12,22 L15,18"
     }
 
     # 1. 使用 Jinja2 渲染 HTML
@@ -86,7 +91,7 @@ async def main():
     print(f"图片生成完毕！保存在: {output_path}")
     
     # 清理临时 HTML
-    os.remove(temp_html_path)
+    # os.remove(temp_html_path)
 
 if __name__ == "__main__":
     asyncio.run(main())

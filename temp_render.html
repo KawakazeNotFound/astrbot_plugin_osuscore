@@ -8,7 +8,7 @@
         @import url('https://fonts.googleapis.com/css2?family=Torus:wght@400;600;700&family=Nunito:wght@400;600;700;800&display=swap');
 
         :root {
-            --accent: {{ star_color }};
+            --accent: #FF4E6F;
             --text-main: #ffffff;
             --bg-col: rgba(0, 0, 0, 0.45);
             --bg-blur: rgba(20, 25, 20, 0.6);
@@ -41,7 +41,7 @@
         .bg-layer {
             position: absolute;
             top: -20px; left: -20px; right: -20px; bottom: -20px;
-            background: url("{{ bg_url }}") center/cover no-radius no-repeat;
+            background: url("https://assets.ppy.sh/beatmaps/1010401/covers/cover.jpg") center/cover no-radius no-repeat;
             filter: blur(8px) brightness(0.85);
             z-index: 1;
         }
@@ -360,7 +360,7 @@
             position: absolute;
             bottom: 0; left: 0; right: 0;
             height: 70px;
-            background: url("{{ bg_url }}") center/cover;
+            background: url("https://assets.ppy.sh/beatmaps/1010401/covers/cover.jpg") center/cover;
             border-radius: var(--panel-radius);
             overflow: hidden;
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
@@ -546,33 +546,33 @@
     <div class="header-container">
         <div class="user-panel">
             <div class="avatar-wrap">
-                <img src="{{ avatar_url }}" alt="avatar" class="avatar">
+                <img src="https://a.ppy.sh/2" alt="avatar" class="avatar">
                 <div class="flag-box">
-                    <img src="{{ flag_url }}" class="flag" alt="flag">
+                    <img src="https://osu.ppy.sh/images/flags/HK.png" class="flag" alt="flag">
                 </div>
-                {% if is_supporter %}
+                
                 <div class="heart-icon">♥</div>
-                {% endif %}
+                
             </div>
             
             <div class="user-details">
-                <div class="username-row">{{ user_name }}</div>
+                <div class="username-row">-Lilac-</div>
                 <div class="user-stats">
                     <div style="color: #bbb;">Level / Rating</div>
-                    <div style="color: #fff;">{{ acc }}%</div>
+                    <div style="color: #fff;">91.73%</div>
                 </div>
-                <div class="pp-big">{{ pp }}PP</div>
+                <div class="pp-big">84PP</div>
             </div>
             <div style="position: absolute; bottom: 8px; left: 108px;" class="rank-labels">
-                <span>#{{ global_rank }}</span>
-                <span>#{{ country_rank }}</span>
+                <span>#370,567</span>
+                <span>#3,747</span>
             </div>
         </div>
 
         <div class="header-right">
             powered by Yumubot v0.7.6 GM // Passed Score (!ymp)<br><br>
-            score time: {{ play_time }}<br>
-            generated: {{ play_time }}
+            score time: 2026-04-11 10:20:39<br>
+            generated: 2026-04-11 10:20:39
         </div>
     </div>
 
@@ -590,9 +590,9 @@
                 </div>
                 
                 <div class="sr-row">
-                    <div class="sr-icon" style="border-color: {{ star_color }};"></div>
-                    <span class="sr-value">{{ stars }}</span>
-                    <span class="sr-diff">/ {{ version[:6] }}</span>
+                    <div class="sr-icon" style="border-color: #FF4E6F;"></div>
+                    <span class="sr-value">5.41</span>
+                    <span class="sr-diff">/ Xandit</span>
                 </div>
                 <!-- 谱面评分色带 -->
                 <div class="rainbow-bar"></div>
@@ -615,14 +615,14 @@
             <div class="panel fail-panel">
                 <div style="display:flex; justify-content:space-between;">
                     <span class="panel-label">Retry & Fail</span>
-                    <span class="panel-label">Pass: {{ pass_count }} / {{ play_count }} [{{ pass_percent }}%]</span>
+                    <span class="panel-label">Pass: 4501 / 30403 [15%]</span>
                 </div>
                 
                 <!-- Fail Graph -->
                 <div style="flex:1; display:flex; align-items:flex-end;">
                     <svg width="100%" height="30" preserveAspectRatio="none" viewBox="0 0 100 30" id="fail-graph">
-                        <path d="M0,30 {{ fail_graph_path }} Q100,30 100,30 Z" fill="rgba(255, 102, 170, 0.6)"></path>
-                        <path d="M0,30 {{ retry_graph_path }} Q100,30 100,30 Z" fill="rgba(255, 204, 85, 0.6)"></path>
+                        <path d="M0,30 L5,28 L8,25 L10,25 L12,20 L15,22 Q100,30 100,30 Z" fill="rgba(255, 102, 170, 0.6)"></path>
+                        <path d="M0,30 L5,29 L8,26 L10,24 L12,22 L15,18 Q100,30 100,30 Z" fill="rgba(255, 204, 85, 0.6)"></path>
                     </svg>
                 </div>
             </div>
@@ -630,15 +630,15 @@
             <div class="panel stats-panel">
                 <div style="display:flex; justify-content:space-between;">
                     <span class="panel-label">Statistics</span>
-                    <span class="panel-label" style="text-transform:none;">Circles: {{ circles }} / Sliders: {{ sliders }}</span>
+                    <span class="panel-label" style="text-transform:none;">Circles: 186 / Sliders: 259</span>
                 </div>
                 
                 <div class="stats-grid">
                     <!-- BPM -->
                     <div class="stat-box">
                         <div class="sb-top">
-                            <span class="sb-icon"><img src="{{ assets_dir }}/mapinfo/bpm.svg" style="filter:invert(1);"></span>
-                            <span class="sb-val">{{ bpm }}</span>
+                            <span class="sb-icon"><img src="file:///Users/ryosume/GitHub/astrbot_plugin_osuscore/assets/mapinfo/bpm.svg" style="filter:invert(1);"></span>
+                            <span class="sb-val">162</span>
                             <span class="sb-meta">bpm</span>
                         </div>
                         <div class="sb-bar-bg"><div class="sb-bar-fg" style="width: 50%; background:#f6f05c;"></div></div>
@@ -647,8 +647,8 @@
                     <!-- Length -->
                     <div class="stat-box">
                         <div class="sb-top">
-                            <span class="sb-icon"><img src="{{ assets_dir }}/mapinfo/total_length.svg" style="filter:invert(1)"></span>
-                            <span class="sb-val">{{ time }}</span>
+                            <span class="sb-icon"><img src="file:///Users/ryosume/GitHub/astrbot_plugin_osuscore/assets/mapinfo/total_length.svg" style="filter:invert(1)"></span>
+                            <span class="sb-val">1:32</span>
                         </div>
                         <div class="sb-bar-bg"><div class="sb-bar-fg" style="width: 70%; background:#ff4e6f;"></div></div>
                         <div class="sb-labels"><span>Length</span></div>
@@ -659,33 +659,33 @@
                     <!-- CS -->
                     <div class="stat-box">
                         <div class="sb-top">
-                            <span class="sb-val">{{ cs }}</span>
+                            <span class="sb-val">3.8</span>
                         </div>
-                        <div class="sb-bar-bg"><div class="sb-bar-fg" style="width: {{ cs_percent }}%;"></div></div>
+                        <div class="sb-bar-bg"><div class="sb-bar-fg" style="width: 38%;"></div></div>
                         <div class="sb-labels"><span>CS</span><span>10</span></div>
                     </div>
                     <!-- AR -->
                     <div class="stat-box">
                         <div class="sb-top">
-                            <span class="sb-val">{{ ar }}</span>
+                            <span class="sb-val">9.3</span>
                         </div>
-                        <div class="sb-bar-bg"><div class="sb-bar-fg" style="width: {{ ar_percent }}%;"></div></div>
+                        <div class="sb-bar-bg"><div class="sb-bar-fg" style="width: 93%;"></div></div>
                         <div class="sb-labels"><span>AR</span><span>10</span></div>
                     </div>
                     <!-- OD -->
                     <div class="stat-box">
                         <div class="sb-top">
-                            <span class="sb-val">{{ od }}</span>
+                            <span class="sb-val">9</span>
                         </div>
-                        <div class="sb-bar-bg"><div class="sb-bar-fg" style="width: {{ od_percent }}%;"></div></div>
+                        <div class="sb-bar-bg"><div class="sb-bar-fg" style="width: 90%;"></div></div>
                         <div class="sb-labels"><span>OD</span><span>10</span></div>
                     </div>
                     <!-- HP -->
                     <div class="stat-box">
                         <div class="sb-top">
-                            <span class="sb-val">{{ hp }}</span>
+                            <span class="sb-val">5.5</span>
                         </div>
-                        <div class="sb-bar-bg"><div class="sb-bar-fg" style="width: {{ hp_percent }}%;"></div></div>
+                        <div class="sb-bar-bg"><div class="sb-bar-fg" style="width: 55%;"></div></div>
                         <div class="sb-labels"><span>HP</span><span>10</span></div>
                     </div>
                 </div>
@@ -696,17 +696,17 @@
         <div class="col-mid">
             <!-- 根据 grade 加载贴图 -->
             <div class="big-grade-container">
-                <img src="{{ assets_dir }}/ranking/ranking-{{ grade }}.png" alt="{{ grade }}" class="big-grade-img">
+                <img src="file:///Users/ryosume/GitHub/astrbot_plugin_osuscore/assets/ranking/ranking-A.png" alt="A" class="big-grade-img">
             </div>
 
             <div class="map-banner">
                 <div class="map-banner-overlay">
                     <div class="map-info">
-                        <div class="map-title">{{ title }}</div>
-                        <div class="map-artist">{{ artist }}</div>
+                        <div class="map-title">Monster Effect</div>
+                        <div class="map-artist">THE ORAL CIGARETTES</div>
                     </div>
-                    <div class="map-mapper">{{ mapper }}</div>
-                    <div class="map-extra">{{ map_id }}</div>
+                    <div class="map-mapper">sparxo</div>
+                    <div class="map-extra">2117573</div>
                 </div>
             </div>
         </div>
@@ -718,20 +718,20 @@
                 <div class="panel-label" style="text-align:right;">Performance Points</div>
                 <div class="pp-top">
                     <div>
-                        <span class="pp-main-txt">{{ pp }}</span><span class="pp-sub-txt">PP / {{ pp_if_fc }} FC [{{ acc }}%]</span>
+                        <span class="pp-main-txt">84</span><span class="pp-sub-txt">PP / 152 FC [91.73%]</span>
                     </div>
                 </div>
                 <div class="triple-bar-container">
-                    <div class="tb-aim" style="width: 40%;">{{ pp_aim }}</div>
-                    <div class="tb-acc" style="width: 20%;">{{ pp_acc }}</div>
-                    <div class="tb-spd" style="width: 10%;">{{ pp_speed }}</div>
-                    <div class="tb-rest">{{ pp_if_fc }}</div>
+                    <div class="tb-aim" style="width: 40%;">49</div>
+                    <div class="tb-acc" style="width: 20%;">12</div>
+                    <div class="tb-spd" style="width: 10%;">18</div>
+                    <div class="tb-rest">152</div>
                 </div>
             </div>
 
             <div class="panel score-panel">
                 <div class="panel-label" style="text-align:right;">Score</div>
-                <div class="score-val">{{ score }}</div>
+                <div class="score-val">1,247,630</div>
             </div>
 
             <div class="panel acc-combo-panel">
@@ -740,8 +740,8 @@
                     <div class="panel-label" style="margin-top:20px;">Combo</div>
                 </div>
                 <div class="ac-box">
-                    <div class="ac-val">{{ acc }}<span style="font-size:20px;">%</span></div>
-                    <div class="ac-val">{{ max_combo }} <span class="ac-sub">/ {{ total_combo }}</span></div>
+                    <div class="ac-val">91.73<span style="font-size:20px;">%</span></div>
+                    <div class="ac-val">168 <span class="ac-sub">/ 592</span></div>
                 </div>
             </div>
 
@@ -751,25 +751,25 @@
                     <span class="j-label">300</span>
                     <div class="j-dot" style="background:var(--judge-300);"></div>
                     <div class="j-bar-bg"><div class="j-bar-fg" style="background:var(--judge-300); width: 90%;"></div></div>
-                    <span class="j-val">{{ count_300 }}</span>
+                    <span class="j-val">375</span>
                 </div>
                 <div class="j-row">
                     <span class="j-label">100</span>
                     <div class="j-dot" style="background:var(--judge-100);"></div>
                     <div class="j-bar-bg"><div class="j-bar-fg" style="background:var(--judge-100); width: 10%;"></div></div>
-                    <span class="j-val">{{ count_100 }}</span>
+                    <span class="j-val">31</span>
                 </div>
                 <div class="j-row">
                     <span class="j-label">50</span>
                     <div class="j-dot" style="background:var(--judge-50);"></div>
                     <div class="j-bar-bg"><div class="j-bar-fg" style="background:var(--judge-50); width: 2%;"></div></div>
-                    <span class="j-val">{{ count_50 }}</span>
+                    <span class="j-val">5</span>
                 </div>
                 <div class="j-row">
                     <span class="j-label">0</span>
                     <div class="j-dot" style="background:var(--judge-0);"></div>
                     <div class="j-bar-bg"><div class="j-bar-fg" style="background:var(--judge-0); width: 5%;"></div></div>
-                    <span class="j-val">{{ count_miss }}</span>
+                    <span class="j-val">10</span>
                 </div>
             </div>
 

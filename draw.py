@@ -92,6 +92,11 @@ class ScoreImageGenerator:
             "ar": f"{beatmap_info.get('ar', 0):.1f}",
             "ar_percent": min(100, beatmap_info.get("ar", 0) * 10),
             "sr_percent": min(100, (stars / 10.0) * 100),
+            "pass_count": min(99999, beatmap_info.get("passcount", 0)),
+            "play_count": max(1, beatmap_info.get("playcount", 1)),
+            "pass_percent":  f"{(beatmap_info.get('passcount', 0) / max(1, beatmap_info.get('playcount', 1))) * 100:.0f}",
+            "fail_graph_path": self._generate_graph_path(beatmap_info.get("failtimes", {}).get("fail", [])),
+            "retry_graph_path": self._generate_graph_path(beatmap_info.get("failtimes", {}).get("exit", [])),
             "avatar_url": user_info.get("avatar_url", ""),
             "user_name": user_info.get("username", ""),
             "is_supporter": user_info.get("is_supporter", False),
@@ -118,6 +123,27 @@ class ScoreImageGenerator:
 
         template = self.env.get_template("index.html")
         rendered_html = template.render(**context)
+        return rendered_html
+
+    def _generate_graph_path(self, data: list) -> str:
+        if not data:
+            return ""
+        
+        # Take up to 100 points
+        max_val = max(data) if data else 1
+        if max_val == 0: max_val = 1
+        
+        # Calculate width spacing based on length (map to 0-100)
+        width_step = 100 / max(len(data), 1)
+        
+        path_parts = []
+        for i, val in enumerate(data):
+            x = i * width_step
+            # SVG y goes top to bottom, 30 is base height
+            y = 30 - (val / max_val * 25) 
+            path_parts.append(f"L{x:.1f},{y:.1f}")
+            
+        return " ".join(path_parts)
         
         # 将 HTML 保存到临时文件，由于 playwright async_playwright 打开 file://
         temp_html_path = Path(__file__).parent / f"temp_{score_info.get('created_at', 'score').replace(' ', '_').replace(':', '')}.html"
