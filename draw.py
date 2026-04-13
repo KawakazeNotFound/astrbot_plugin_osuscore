@@ -118,6 +118,7 @@ class ScoreImageGenerator:
             "score": f"{score_info.get('score', 0):,}",
             "play_time": str(score_info.get("created_at", "")).replace("T", " ")[:19],
             "global_rank": f"{user_info.get('global_rank', 0):,}",
+            "user_pp": f"{user_info.get('pp', 0):,.0f}" if user_info.get('pp') else "-",
             "pp": f"{score_info.get('pp', 0):.0f}" if score_info.get('pp') else "-",
             "pp_if_fc": f"{pp_if_fc:.0f}" if pp_if_fc else "-",
             "pp_ss": f"{score_info.get('ss_pp', 0):.0f}" if score_info.get('ss_pp') else "-",

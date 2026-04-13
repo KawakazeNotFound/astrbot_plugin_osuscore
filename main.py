@@ -205,6 +205,7 @@ class OsuScorePlugin(Star):
                         score['user'] = {}
                     score['user']['statistics'] = full_user_info.get('statistics', {})
                     score['user']['is_supporter'] = full_user_info.get('is_supporter', False)
+                    score['user']['cover'] = full_user_info.get('cover', {})
             except Exception as e:
                 logger.warning(f"Failed to get full user info: {e}")
 
