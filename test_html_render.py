@@ -1,6 +1,6 @@
 import asyncio
 from pathlib import Path
-from jinja2 import Environment, FileSystemPathLoader, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader
 from playwright.async_api import async_playwright
 import os
 
@@ -19,7 +19,8 @@ async def main():
         "time": "1:32",
         "circles": "186",
         "sliders": "259",
-        "spinners": "162",
+        "bpm": "162",
+        "assets_dir": f"file://{Path(__file__).parent.resolve()}/assets",
         "cs": "3.8",
         "cs_percent": 38,
         "hp": "5.5",

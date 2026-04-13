@@ -1,571 +1,758 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Osu! Score</title>
+    <title>osu! Score</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Torus:wght@400;600;700&display=swap');
-        
+        @import url('https://fonts.googleapis.com/css2?family=Torus:wght@400;600;700&family=Nunito:wght@400;600;700;800&display=swap');
+
+        :root {
+            --accent: {{ star_color }};
+            --text-main: #ffffff;
+            --bg-col: rgba(0, 0, 0, 0.45);
+            --bg-blur: rgba(20, 25, 20, 0.6);
+            --panel-radius: 12px;
+            --main-radius: 20px;
+            
+            --judge-300: #55d0ff;
+            --judge-100: #88ee22;
+            --judge-50: #ffcc22;
+            --judge-0: #ff3333;
+        }
+
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: 'Torus', "Microsoft YaHei", sans-serif;
-            color: #fff;
         }
 
         body {
             width: 1100px;
             height: 600px;
             overflow: hidden;
+            font-family: 'Nunito', 'Torus', sans-serif;
+            color: var(--text-main);
             position: relative;
-            background-color: #222;
+            background-color: #111;
         }
 
-        /* 底部高斯模糊背景 */
+        /* ---------------- 背景 ---------------- */
         .bg-layer {
             position: absolute;
             top: -20px; left: -20px; right: -20px; bottom: -20px;
-            background-image: url('{{ bg_url }}');
-            background-size: cover;
-            background-position: center;
-            filter: blur(10px) brightness(0.6);
-            z-index: 0;
-        }
-
-        .container {
-            position: relative;
-            z-index: 1;
-            width: 100%;
-            height: 100%;
-            padding: 25px 35px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        /* 顶部 ID 信息 */
-        .top-info {
-            display: flex;
-            justify-content: space-between;
-            font-size: 18px;
-            font-weight: 600;
-            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
-            width: 480px; /* 对齐左列 */
-        }
-
-        .main-content {
-            display: flex;
-            gap: 30px;
-            flex: 1;
-        }
-
-        /* ----- 左侧栏 ----- */
-        .left-col {
-            width: 480px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        /* 封面大卡片 */
-        .map-card {
-            height: 180px;
-            border-radius: 12px;
-            overflow: hidden;
-            position: relative;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 15px;
-        }
-        .map-bg {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-image: url('{{ bg_url }}');
-            background-size: cover;
-            background-position: center;
+            background: url("{{ bg_url }}") center/cover no-radius no-repeat;
+            filter: blur(8px) brightness(0.85);
             z-index: 1;
         }
-        .map-overlay {
+
+        /* ---------------- 顶部浮窗 ---------------- */
+        .header-container {
             position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(to right, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.2) 100%);
-            z-index: 2;
-        }
-        .map-card-content {
-            position: relative;
-            z-index: 3;
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            justify-content: space-between;
-        }
-        .difficulty-tags {
+            top: 0; left: 0; right: 0;
+            height: 140px;
+            z-index: 10;
             display: flex;
             justify-content: space-between;
-        }
-        .diff-name {
-            background-color: rgba(30, 30, 30, 0.8);
-            padding: 2px 10px;
-            border-radius: 10px;
-            font-size: 14px;
-            color: #ff80df;
-            font-weight: 600;
-        }
-        .star-rating {
-            background-color: {{ star_color }};
-            padding: 2px 10px;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 700;
-            color: #fff;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-        }
-        .map-titles {
-            margin-top: auto;
-        }
-        .map-titles h1 {
-            font-size: 28px;
-            line-height: 1.1;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-        }
-        .map-titles h2 {
-            font-size: 16px;
-            font-weight: 600;
-            text-shadow: 2px 2px 3px rgba(0,0,0,0.8);
-        }
-        .map-titles p {
-            font-size: 14px;
-            margin-top: 5px;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            padding: 20px;
         }
 
-        /* 属性小行 (时间、圈圈) */
-        .stats-row {
-            display: flex;
-            justify-content: space-between;
-            background: rgba(0, 0, 0, 0.4);
-            padding: 8px 15px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-        }
-        .stats-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        .stats-item span { color: #facc22; }
-
-        /* 面板基础样式 */
-        .panel {
-            background: rgba(0, 0, 0, 0.5);
-            border-radius: 12px;
-            padding: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.05);
-        }
-
-        /* 参数进度条面板 */
-        .attributes-panel {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .attr-row {
-            display: flex;
-            align-items: center;
-            font-size: 14px;
-            font-weight: 600;
-        }
-        .attr-label {
-            width: 100px;
-            text-align: right;
-            margin-right: 10px;
-            text-shadow: 1px 1px 2px #000;
-        }
-        .progress-bar-container {
-            flex: 1;
-            height: 8px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 4px;
-            overflow: hidden;
-            margin-right: 10px;
-        }
-        .progress-bar {
-            height: 100%;
-            background: #fff;
-            border-radius: 4px;
-        }
-        .attr-val {  width: 30px; font-weight: 700; text-shadow: 1px 1px 2px #000; }
-
-        /* 玩家面板 */
         .user-panel {
+            background: rgba(25, 20, 30, 0.6);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
             display: flex;
-            align-items: center;
+            padding: 12px;
             gap: 15px;
-            height: 120px;
-            margin-top: auto;
+            width: 320px; /* 调整宽度以容纳等多久字 */
+            height: 130px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .avatar-wrap {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            border-radius: 14px;
+            overflow: visible;
         }
         .avatar {
-            width: 90px;
-            height: 90px;
-            border-radius: 10px;
+            width: 100%;
+            height: 100%;
+            border-radius: 14px;
             object-fit: cover;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }
-        .user-info {
+        .flag-box {
+            position: absolute;
+            bottom: -8px; left: 0;
+            background: #fff;
+            padding: 2px 4px;
+            border-radius: 4px;
             display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .username-row {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 24px;
-            font-weight: 700;
-            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
-            color: #ffb8e0;
-        }
-        .supporter-heart {
-            color: #ff66aa;
-            font-size: 20px;
-        }
-        .rank-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 20px;
-            font-weight: 600;
-            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
         }
         .flag {
-            width: 36px;
-            border-radius: 4px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+            width: 16px;
+            height: 12px;
+            object-fit: cover;
         }
 
-        /* ----- 右侧栏 ----- */
-        .right-col {
+        .heart-icon {
+            position: absolute;
+            bottom: -8px;
+            left: 28px;
+            background: #ff66aa;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+        }
+
+        .user-details {
             flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        
+        .username-row {
+            font-size: 20px;
+            font-weight: 800;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            overflow: hidden;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+        
+        .user-stats {
+            display: flex;
+            flex-direction: column;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        .pp-big {
+            font-size: 24px;
+            font-weight: 800;
+            align-self: flex-end;
+            margin-top: 4px;
+            letter-spacing: -0.5px;
+        }
+        .rank-labels {
+            display: flex;
+            gap: 8px;
+            font-size: 11px;
+            color: #d0d0d0;
+            margin-top: auto;
+        }
+
+        .header-right {
+            text-align: right;
+            font-size: 12px;
+            color: #eeeeee;
+            font-weight: 600;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            line-height: 1.4;
+        }
+
+        /* ---------------- 主内容盒 ---------------- */
+        .main-board {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            height: 410px;
+            background: rgba(30, 45, 30, 0.7); /* 暗绿色基调 */
+            border-radius: var(--main-radius);
+            box-shadow: inset 0 1px 1px rgba(255,255,255,0.1), 0 8px 30px rgba(0,0,0,0.5);
+            display: flex;
+            padding: 20px;
+            gap: 20px;
+            z-index: 5;
+            backdrop-filter: blur(10px);
+        }
+
+        /* 列骨架 */
+        .col-left {
+            width: 290px;
             display: flex;
             flex-direction: column;
             gap: 15px;
         }
-
-        /* 顶部成绩 */
-        .score-top {
+        .col-mid {
+            flex: 1;
             display: flex;
-            gap: 20px;
-            align-items: center;
+            flex-direction: column;
+            position: relative;
+        }
+        .col-right {
+            width: 290px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* 通用面板样式 */
+        .panel {
+            background: rgba(25, 25, 25, 0.6);
+            border-radius: var(--panel-radius);
+            padding: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            position: relative;
+        }
+        .panel-label {
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #cccccc;
             margin-bottom: 5px;
         }
-        .grade {
-            width: 140px;
-            height: 70px;
-            {% if grade == 'SS' or grade == 'XH' %}
-                background: linear-gradient(to right, #e0e0e0, #ffffff);
-                color: #555;
-            {% elif grade == 'S' or grade == 'SH' %}
-                background: linear-gradient(to right, #ffcc22, #ffee88);
-                color: #850;
-            {% elif grade == 'A' %}
-                background: linear-gradient(to right, #77cc22, #99ee44);
-                color: #242;
-            {% elif grade == 'B' %}
-                background: linear-gradient(to right, #4488ff, #77aaff);
-                color: #024;
-            {% elif grade == 'C' %}
-                background: linear-gradient(to right, #cc66bb, #ee88dd);
-                color: #414;
-            {% else %}
-                background: linear-gradient(to right, #cc3333, #ee5555);
-                color: #400;
-            {% endif %}
-            border-radius: 35px;
+
+        /* ----- 左列面板 ----- */
+        .sr-panel {
             display: flex;
+            flex-direction: column;
+            height: 80px;
             justify-content: center;
-            align-items: center;
-            font-size: 50px;
-            font-weight: 700;
-            box-shadow: 0 0 15px rgba(255,255,255,0.2);
-            text-shadow: none;
         }
-        .score-details {
+        .sr-row {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+        }
+        .sr-icon {
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            background: transparent;
+            border: 4px solid var(--accent);
+            display: inline-block;
+        }
+        .sr-value {
+            font-size: 38px;
+            font-weight: 800;
+            letter-spacing: -1px;
+            line-height: 1;
+        }
+        .sr-diff {
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-left: 2px;
+        }
+        .sr-r-top {
+            position: absolute;
+            top: 10px; right: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+        }
+        .mod-icon {
+            background: rgba(0,0,0,0.5);
+            padding: 2px; border-radius: 4px;
+            display: flex;
+        }
+        .mod-icon svg { width: 20px; height: 20px; }
+
+        .rainbow-bar {
+            height: 8px;
+            width: 100%;
+            border-radius: 4px;
+            background: linear-gradient(to right, #4290fb, #4fc0ff, #4fffd5, #7cff4f, #f6f05c, #ff8068, #ff4e6f, #c645b8, #6563de, #18158e);
+            margin-top: 10px;
+        }
+
+        /* 密度图面板 */
+        .density-panel {
+            height: 100px;
             display: flex;
             flex-direction: column;
         }
-        .score-num {
-            font-size: 56px;
-            font-weight: 700;
-            line-height: 1.1;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+
+        /* 属性指标面板 */
+        .stats-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
         }
-        .score-meta {
-            font-size: 16px;
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto;
+            gap: 12px;
+            margin-top: 5px;
+        }
+        .stat-box {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .sb-top {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .sb-icon {
+            width: 16px; height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center; justify-content: center;
+        }
+        .sb-icon img { height: 12px; width: 12px; }
+        .sb-val {
+            font-size: 18px;
+            font-weight: 800;
+        }
+        .sb-meta {
+            font-size: 9px;
+            color: #aaa;
+            margin-left: auto;
+        }
+        .sb-bar-bg {
+            height: 4px; width: 100%;
+            background: rgba(0,0,0,0.4);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 2px;
+        }
+        .sb-bar-fg {
+            height: 100%;
+            background: var(--judge-300);
+            border-radius: 2px;
+        }
+        .sb-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 8px;
+            color: #777;
+            font-weight: 700;
+            margin-top: 1px;
+        }
+
+        /* ----- 中间大字及横幅 ----- */
+        .big-grade-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .big-grade-img {
+            max-height: 260px;
+            max-width: 260px;
+            object-fit: contain;
+            margin-top: -60px;
+            filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.3));
+        }
+        
+        .map-banner {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 70px;
+            background: url("{{ bg_url }}") center/cover;
+            border-radius: var(--panel-radius);
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .map-banner-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to right, rgba(0,0,0,0.8) 20%, rgba(0,0,0,0.3) 100%);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+        }
+        .map-info {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+        }
+        .map-title {
+            font-size: 22px;
+            font-weight: 800;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+        }
+        .map-artist {
+            font-size: 14px;
+            font-weight: 600;
             color: #ddd;
             text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
         }
-
-        /* 数据卡片基础 */
-        .data-card {
-            display: flex;
-            background: rgba(0, 0, 0, 0.5);
-            border-radius: 12px;
-            padding: 20px;
-            border: 1px solid rgba(255,255,255,0.05);
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        .map-extra {
+            position: absolute;
+            bottom: 8px;
+            right: 15px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #fff;
             text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
         }
-        .divider {
-            width: 1px;
-            background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.3) 0, rgba(255,255,255,0.3) 5px, transparent 5px, transparent 10px);
-            margin: 0 25px;
+        .map-mapper {
+            position: absolute;
+            bottom: 8px;
+            left: 20px;
+            font-size: 12px;
+            font-weight: 700;
         }
 
-        .block-label {
-            background: #252525;
-            padding: 2px 15px;
-            border-radius: 12px;
+        /* ----- 右列面板 ----- */
+        .pp-panel {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 12px;
+        }
+        .pp-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+        .pp-main-txt {
+            font-size: 38px;
+            font-weight: 800;
+            line-height: 1;
+            letter-spacing: -1px;
+        }
+        .pp-sub-txt {
             font-size: 14px;
             font-weight: 700;
-            color: #aaa;
-            display: inline-block;
-            margin-bottom: 5px;
-            box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+            margin-left: 2px;
+            color: #ddd;
         }
-        
-        .val {
-            font-size: 24px;
+        .pp-details {
+            font-size: 11px;
             font-weight: 700;
-            text-align: center;
         }
-        .val-red { color: #ff5555; }
-
-        /* PP 面板 */
-        .pp-panel {
-            height: 140px;
-            align-items: center;
-        }
-        .pp-main {
+        /* 三段PP条 */
+        .triple-bar-container {
             display: flex;
-            flex-direction: column;
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+            background: #2b3935;
+        }
+        .triple-bar-container div {
+            display: flex;
             align-items: center;
             justify-content: center;
-            width: 120px;
+            font-size: 14px;
+            font-weight: 800;
+            color: #111;
         }
-        .pp-main .val { font-size: 48px; line-height: 1.1; }
+        .tb-aim { background: #55d0ff; }
+        .tb-acc { background: #cefa67; }
+        .tb-spd { background: #ffcc55; }
+        .tb-rest { 
+            background: #354a4f; 
+            flex: 1; 
+            justify-content: flex-end !important;
+            padding-right: 12px;
+            color: #fff !important;
+        }
+
+        .score-panel {
+            height: 55px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .score-val {
+            font-size: 36px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-align: left;
+        }
+
+        .acc-combo-panel {
+            height: 70px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .ac-box {
+            display: flex;
+            flex-direction: column;
+        }
+        .ac-val {
+            font-size: 32px;
+            font-weight: 800;
+            text-align: right;
+            line-height: 1.1;
+        }
+        .ac-sub {
+            font-size: 18px;
+            color: #ccc;
+        }
+
+        .judge-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 8px 12px;
+            gap: 6px;
+        }
+        .j-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .j-label {
+            width: 25px;
+            font-size: 12px;
+            font-weight: 800;
+            text-align: right;
+        }
+        .j-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+        }
+        .j-bar-bg {
+            flex: 1;
+            height: 6px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 3px;
+        }
+        .j-bar-fg {
+            height: 100%;
+            border-radius: 3px;
+        }
+        .j-val {
+            width: 30px;
+            text-align: right;
+            font-size: 14px;
+            font-weight: 800;
+        }
         
-        .pp-sub {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            gap: 15px;
-        }
-        .pp-sub-row {
-            display: flex;
-            justify-content: space-around;
-        }
-        .pp-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        /* 底部分数面板 */
-        .bottom-panel {
-            height: 145px;
-            align-items: center;
-        }
-        .acc-combo {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            width: 120px;
-        }
-        .hits-grid {
-            flex: 1;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            grid-template-rows: 1fr 1fr;
-            gap: 15px;
-        }
     </style>
 </head>
 <body>
+
+    <!-- 顶层过滤 -->
     <div class="bg-layer"></div>
-    
-    <div class="container">
-        <!-- 顶部 ID -->
-        <div class="top-info">
-            <span>Setid: {{ set_id }}</span>
-            <span>Mapid: {{ map_id }}</span>
+
+    <!-- 顶部 -->
+    <div class="header-container">
+        <div class="user-panel">
+            <div class="avatar-wrap">
+                <img src="{{ avatar_url }}" alt="avatar" class="avatar">
+                <div class="flag-box">
+                    <img src="{{ flag_url }}" class="flag" alt="flag">
+                </div>
+                {% if is_supporter %}
+                <div class="heart-icon">♥</div>
+                {% endif %}
+            </div>
+            
+            <div class="user-details">
+                <div class="username-row">{{ user_name }}</div>
+                <div class="user-stats">
+                    <div style="color: #bbb;">Level / Rating</div>
+                    <div style="color: #fff;">{{ acc }}%</div>
+                </div>
+                <div class="pp-big">{{ pp }}PP</div>
+            </div>
+            <div style="position: absolute; bottom: 8px; left: 108px;" class="rank-labels">
+                <span>#{{ global_rank }}</span>
+                <span>#{{ country_rank }}</span>
+            </div>
         </div>
 
-        <div class="main-content">
-            <!-- 左侧列 -->
-            <div class="left-col">
-                <!-- 歌曲卡片 -->
-                <div class="map-card">
-                    <div class="map-bg"></div>
-                    <div class="map-overlay"></div>
-                    <div class="map-card-content">
-                        <div class="difficulty-tags">
-                            <span class="diff-name">{{ version }}</span>
-                            <span class="star-rating">★{{ stars }}</span>
-                        </div>
-                        <div class="map-titles">
-                            <h1>{{ title }}</h1>
-                            <h2>{{ artist }}</h2>
-                            <p>谱师: {{ mapper }}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 时长统计等 -->
-                <div class="stats-row">
-                    <div class="stats-item"><span>⏱</span> {{ time }}</div>
-                    <div class="stats-item"><span>⭕</span> {{ circles }}</div>
-                    <div class="stats-item"><span>〰</span> {{ sliders }}</div>
-                    <div class="stats-item"><span>🌀</span> {{ spinners }}</div>
-                </div>
-
-                <!-- 铺面属性 -->
-                <div class="panel attributes-panel">
-                    <div class="attr-row">
-                        <div class="attr-label">圆圈大小/CS</div>
-                        <div class="progress-bar-container"><div class="progress-bar" style="width: {{ cs_percent }}%;"></div></div>
-                        <div class="attr-val">{{ cs }}</div>
-                    </div>
-                    <div class="attr-row">
-                        <div class="attr-label">掉血速度/HP</div>
-                        <div class="progress-bar-container"><div class="progress-bar" style="width: {{ hp_percent }}%;"></div></div>
-                        <div class="attr-val">{{ hp }}</div>
-                    </div>
-                    <div class="attr-row">
-                        <div class="attr-label">准度要求/OD</div>
-                        <div class="progress-bar-container"><div class="progress-bar" style="width: {{ od_percent }}%;"></div></div>
-                        <div class="attr-val">{{ od }}</div>
-                    </div>
-                    <div class="attr-row">
-                        <div class="attr-label">缩圈速度/AR</div>
-                        <div class="progress-bar-container"><div class="progress-bar" style="width: {{ ar_percent }}%;"></div></div>
-                        <div class="attr-val">{{ ar }}</div>
-                    </div>
-                    <div class="attr-row">
-                        <div class="attr-label">难度星级/SR</div>
-                        <div class="progress-bar-container"><div class="progress-bar" style="width: {{ sr_percent }}%;"></div></div>
-                        <div class="attr-val">{{ stars }}</div>
-                    </div>
-                </div>
-
-                <!-- 玩家名片 -->
-                <div class="panel user-panel">
-                    <img src="{{ avatar_url }}" alt="avatar" class="avatar">
-                    <div class="user-info">
-                        <div class="username-row">
-                            {{ user_name }}
-                            {% if is_supporter %}<span class="supporter-heart">♥</span>{% endif %}
-                        </div>
-                        <div class="rank-row">
-                            <img src="{{ flag_url }}" alt="flag" class="flag">
-                            <span>#{{ country_rank }}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 右侧列 -->
-            <div class="right-col">
-                <div class="score-top">
-                    <!-- 根据grade渲染不同颜色 -->
-                    <div class="grade">{{ grade }}</div>
-                    <div class="score-details">
-                        <div class="score-num">{{ score }}</div>
-                        <div class="score-meta">
-                            达成时间: {{ play_time }}<br>
-                            全球排行: #{{ global_rank }}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PP 模块 -->
-                <div class="data-card pp-panel">
-                    <div class="pp-main">
-                        <span class="block-label" style="background:#111;">PP</span>
-                        <div class="val">{{ pp }}</div>
-                    </div>
-                    <div class="divider"></div>
-                    <div class="pp-sub">
-                        <div class="pp-sub-row">
-                            <div class="pp-item">
-                                <span class="block-label">IF FC</span>
-                                <div class="val">{{ pp_if_fc }}</div>
-                            </div>
-                            <div class="pp-item">
-                                <span class="block-label">SS PP</span>
-                                <div class="val">{{ pp_ss }}</div>
-                            </div>
-                            <div class="pp-item">
-                                <!-- 占位平衡 -->
-                            </div>
-                        </div>
-                        <div class="pp-sub-row">
-                            <div class="pp-item">
-                                <span class="block-label">AIM</span>
-                                <div class="val">{{ pp_aim }}</div>
-                            </div>
-                            <div class="pp-item">
-                                <span class="block-label">SPEED</span>
-                                <div class="val">{{ pp_speed }}</div>
-                            </div>
-                            <div class="pp-item">
-                                <span class="block-label">ACC</span>
-                                <div class="val">{{ pp_acc }}</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Hit 判断 模块 -->
-                <div class="data-card bottom-panel">
-                    <div class="acc-combo">
-                        <div class="pp-item">
-                            <span class="block-label">准确率</span>
-                            <div class="val">{{ acc }}%</div>
-                        </div>
-                        <div class="pp-item">
-                            <span class="block-label">最大连击</span>
-                            <div class="val">{{ max_combo }}/{{ total_combo }}</div>
-                        </div>
-                    </div>
-                    <div class="divider"></div>
-                    <div class="hits-grid">
-                        <div class="pp-item">
-                            <span class="block-label">300</span>
-                            <div class="val">{{ count_300 }}</div>
-                        </div>
-                        <div class="pp-item">
-                            <span class="block-label">100</span>
-                            <div class="val">{{ count_100 }}</div>
-                        </div>
-                        <div class="pp-item">
-                            <span class="block-label">50</span>
-                            <div class="val">{{ count_50 }}</div>
-                        </div>
-                        <div class="pp-item">
-                            <span class="block-label" style="color:#ff5555;">MISS</span>
-                            <div class="val val-red">{{ count_miss }}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="header-right">
+            powered by Yumubot v0.7.6 GM // Passed Score (!ymp)<br><br>
+            score time: {{ play_time }}<br>
+            generated: {{ play_time }}
         </div>
     </div>
+
+
+    <div class="main-board">
+
+        <!-- 左侧 -->
+        <div class="col-left">
+            <div class="panel sr-panel">
+                <div class="sr-r-top">
+                    <!-- Icon placeholder, e.g. HD HR -->
+                    <div style="display:flex;gap:4px;">
+                        <span style="font-size: 10px; font-weight:800; color:#ddd;">Star Rating</span>
+                    </div>
+                </div>
+                
+                <div class="sr-row">
+                    <div class="sr-icon" style="border-color: {{ star_color }};"></div>
+                    <span class="sr-value">{{ stars }}</span>
+                    <span class="sr-diff">/ {{ version[:6] }}</span>
+                </div>
+                <!-- 谱面评分色带 -->
+                <div class="rainbow-bar"></div>
+            </div>
+
+            <div class="panel density-panel">
+                <div style="display:flex; justify-content:space-between;">
+                    <span class="panel-label">Density</span>
+                    <span class="panel-label">User Rating: 0 / 10</span>
+                </div>
+                
+                <!-- Density Graph (Mock) -->
+                <div style="flex:1; display:flex; align-items:flex-end;">
+                    <svg width="100%" height="30" preserveAspectRatio="none" viewBox="0 0 100 30">
+                        <path d="M0,25 L10,20 L20,28 L30,15 L40,18 L50,0  L60,15 L70,22 L80,18 L90,26 L100,20 L100,30 L0,30 Z" fill="rgba(85,208,255,0.4)" stroke="#55d0ff" stroke-width="1"></path>
+                    </svg>
+                </div>
+            </div>
+
+            <div class="panel stats-panel">
+                <div style="display:flex; justify-content:space-between;">
+                    <span class="panel-label">Statistics</span>
+                    <span class="panel-label" style="text-transform:none;">Circles: {{ circles }} / Sliders: {{ sliders }}</span>
+                </div>
+                
+                <div class="stats-grid">
+                    <!-- BPM -->
+                    <div class="stat-box">
+                        <div class="sb-top">
+                            <span class="sb-icon"><img src="{{ assets_dir }}/mapinfo/bpm.svg" style="filter:invert(1);"></span>
+                            <span class="sb-val">{{ bpm }}</span>
+                            <span class="sb-meta">bpm</span>
+                        </div>
+                        <div class="sb-bar-bg"><div class="sb-bar-fg" style="width: 50%; background:#f6f05c;"></div></div>
+                        <div class="sb-labels"><span>BPM</span></div>
+                    </div>
+                    <!-- Length -->
+                    <div class="stat-box">
+                        <div class="sb-top">
+                            <span class="sb-icon"><img src="{{ assets_dir }}/mapinfo/total_length.svg" style="filter:invert(1)"></span>
+                            <span class="sb-val">{{ time }}</span>
+                        </div>
+                        <div class="sb-bar-bg"><div class="sb-bar-fg" style="width: 70%; background:#ff4e6f;"></div></div>
+                        <div class="sb-labels"><span>Length</span></div>
+                    </div>
+                </div>
+
+                <div class="stats-grid" style="margin-top:8px;">
+                    <!-- CS -->
+                    <div class="stat-box">
+                        <div class="sb-top">
+                            <span class="sb-val">{{ cs }}</span>
+                        </div>
+                        <div class="sb-bar-bg"><div class="sb-bar-fg" style="width: {{ cs_percent }}%;"></div></div>
+                        <div class="sb-labels"><span>CS</span><span>10</span></div>
+                    </div>
+                    <!-- AR -->
+                    <div class="stat-box">
+                        <div class="sb-top">
+                            <span class="sb-val">{{ ar }}</span>
+                        </div>
+                        <div class="sb-bar-bg"><div class="sb-bar-fg" style="width: {{ ar_percent }}%;"></div></div>
+                        <div class="sb-labels"><span>AR</span><span>10</span></div>
+                    </div>
+                    <!-- OD -->
+                    <div class="stat-box">
+                        <div class="sb-top">
+                            <span class="sb-val">{{ od }}</span>
+                        </div>
+                        <div class="sb-bar-bg"><div class="sb-bar-fg" style="width: {{ od_percent }}%;"></div></div>
+                        <div class="sb-labels"><span>OD</span><span>10</span></div>
+                    </div>
+                    <!-- HP -->
+                    <div class="stat-box">
+                        <div class="sb-top">
+                            <span class="sb-val">{{ hp }}</span>
+                        </div>
+                        <div class="sb-bar-bg"><div class="sb-bar-fg" style="width: {{ hp_percent }}%;"></div></div>
+                        <div class="sb-labels"><span>HP</span><span>10</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 中间 -->
+        <div class="col-mid">
+            <!-- 根据 grade 加载贴图 -->
+            <div class="big-grade-container">
+                <img src="{{ assets_dir }}/ranking/ranking-{{ grade }}.png" alt="{{ grade }}" class="big-grade-img">
+            </div>
+
+            <div class="map-banner">
+                <div class="map-banner-overlay">
+                    <div class="map-info">
+                        <div class="map-title">{{ title }}</div>
+                        <div class="map-artist">{{ artist }}</div>
+                    </div>
+                    <div class="map-mapper">{{ mapper }}</div>
+                    <div class="map-extra">{{ map_id }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧 -->
+        <div class="col-right">
+            
+            <div class="panel pp-panel">
+                <div class="panel-label" style="text-align:right;">Performance Points</div>
+                <div class="pp-top">
+                    <div>
+                        <span class="pp-main-txt">{{ pp }}</span><span class="pp-sub-txt">PP / {{ pp_if_fc }} FC [{{ acc }}%]</span>
+                    </div>
+                </div>
+                <div class="triple-bar-container">
+                    <div class="tb-aim" style="width: 40%;">{{ pp_aim }}</div>
+                    <div class="tb-acc" style="width: 20%;">{{ pp_acc }}</div>
+                    <div class="tb-spd" style="width: 10%;">{{ pp_speed }}</div>
+                    <div class="tb-rest">{{ pp_if_fc }}</div>
+                </div>
+            </div>
+
+            <div class="panel score-panel">
+                <div class="panel-label" style="text-align:right;">Score</div>
+                <div class="score-val">{{ score }}</div>
+            </div>
+
+            <div class="panel acc-combo-panel">
+                <div class="ac-box">
+                    <div class="panel-label">Accuracy</div>
+                    <div class="panel-label" style="margin-top:20px;">Combo</div>
+                </div>
+                <div class="ac-box">
+                    <div class="ac-val">{{ acc }}<span style="font-size:20px;">%</span></div>
+                    <div class="ac-val">{{ max_combo }} <span class="ac-sub">/ {{ total_combo }}</span></div>
+                </div>
+            </div>
+
+            <div class="panel judge-panel">
+                <div class="panel-label">Judgment</div>
+                <div class="j-row">
+                    <span class="j-label">300</span>
+                    <div class="j-dot" style="background:var(--judge-300);"></div>
+                    <div class="j-bar-bg"><div class="j-bar-fg" style="background:var(--judge-300); width: 90%;"></div></div>
+                    <span class="j-val">{{ count_300 }}</span>
+                </div>
+                <div class="j-row">
+                    <span class="j-label">100</span>
+                    <div class="j-dot" style="background:var(--judge-100);"></div>
+                    <div class="j-bar-bg"><div class="j-bar-fg" style="background:var(--judge-100); width: 10%;"></div></div>
+                    <span class="j-val">{{ count_100 }}</span>
+                </div>
+                <div class="j-row">
+                    <span class="j-label">50</span>
+                    <div class="j-dot" style="background:var(--judge-50);"></div>
+                    <div class="j-bar-bg"><div class="j-bar-fg" style="background:var(--judge-50); width: 2%;"></div></div>
+                    <span class="j-val">{{ count_50 }}</span>
+                </div>
+                <div class="j-row">
+                    <span class="j-label">0</span>
+                    <div class="j-dot" style="background:var(--judge-0);"></div>
+                    <div class="j-bar-bg"><div class="j-bar-fg" style="background:var(--judge-0); width: 5%;"></div></div>
+                    <span class="j-val">{{ count_miss }}</span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
 </body>
 </html>
