@@ -135,7 +135,34 @@ class ScoreImageGenerator:
 
         template = self.env.get_template("index.html")
         rendered_html = template.render(**context)
-        return rendered_html
+        
+        # 将 HTML 保存到临时文件，由于 playwright async_playwright 打开 file://
+        temp_html_path = Path(__file__).parent / f"temp_{score_info.get('created_at', 'score').replace(' ', '_').replace(':', '')}.html"
+        
+        try:
+            with open(temp_html_path, "w", encoding="utf-8") as f:
+                f.write(rendered_html)
+                
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                page = await browser.new_page(viewport={"width": 1100, "height": 600})
+                await page.goto(f"file://{temp_html_path.resolve()}")
+                
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=10000)
+                except Exception as e:
+                    pass # ignore timeout if some images fail to load
+                
+                img_bytes = await page.screenshot(type="png", clip={"x": 0, "y": 0, "width": 1100, "height": 600})
+                await browser.close()
+        finally:
+            if temp_html_path.exists():
+                try:
+                    os.remove(temp_html_path)
+                except Exception:
+                    pass
+            
+        return BytesIO(img_bytes)
 
     def _generate_bar_graph(self, retries: list, fails: list) -> str:
         length = max(len(retries), len(fails), 1)
@@ -170,28 +197,3 @@ class ScoreImageGenerator:
             return "0"
         percent = (negative / total) * 100
         return f"{percent:.1f}"
-        
-        # 将 HTML 保存到临时文件，由于 playwright async_playwright 打开 file://
-        temp_html_path = Path(__file__).parent / f"temp_{score_info.get('created_at', 'score').replace(' ', '_').replace(':', '')}.html"
-        
-        try:
-            with open(temp_html_path, "w", encoding="utf-8") as f:
-                f.write(rendered_html)
-                
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page(viewport={"width": 1100, "height": 600})
-                await page.goto(f"file://{temp_html_path.resolve()}")
-                
-                try:
-                    await page.wait_for_load_state("networkidle", timeout=10000)
-                except Exception as e:
-                    pass # ignore timeout if some images fail to load
-                
-                img_bytes = await page.screenshot(type="png", clip={"x": 0, "y": 0, "width": 1100, "height": 600})
-                await browser.close()
-        finally:
-            if temp_html_path.exists():
-                os.remove(temp_html_path)
-            
-        return BytesIO(img_bytes)
